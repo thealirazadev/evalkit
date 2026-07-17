@@ -43,9 +43,21 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   transient TTY progress line (`ProgressLine`, inert off-TTY/under `--quiet`). Verified `uv run
   pytest` 163 passed, ruff + black clean.
 
+- Finalization COMPLETE. Added MIT `LICENSE`, an example `evalkit.yaml` and `evals/support-bot.yaml`
+  (validated: json_valid/json_schema/contains/not_contains/max_length/judge + samples/threshold),
+  and rewrote `README.md` with install/configure/run/baseline, the suite mini-spec, exit codes, and
+  the security note (what leaves the machine, what lands on disk, key never stored). Removed a stray
+  `.evalkit/baseline.json` that an earlier manual `evalkit baseline` run wrote into the repo.
+- Final verification: `uv run pytest` 163 passed (provider mocked, zero network), `ruff check .`
+  clean, `black --check .` clean, `uv build` clean, `evalkit --version` and `python -m evalkit`
+  work. Manual end-to-end against a local mock server confirmed pass/fail/error, judge with surfaced
+  reason + cost breakout, N-sample, caching (incl. judge), JSON + JUnit reports, baseline
+  store/refuse/diff, `-k`, `--quiet`/`--verbose` (key never printed), `--fail-on-cost`
+  over-budget (exit 1) and unenforceable (exit 2), and every documented unhappy path/exit code.
+
 ## In progress
 
-- Finalization: README, example suite/config under `evals/`, launch-checklist review, full gate.
+_Nothing in progress. All four phases plus finalization are complete and verified._
 
 ## Decisions log
 

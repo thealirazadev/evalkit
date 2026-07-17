@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import click
@@ -19,7 +20,7 @@ from rich.console import Console
 from evalkit import __version__
 from evalkit.baseline import diff_against_baseline, load_baseline, write_baseline
 from evalkit.config import Config, load_config
-from evalkit.errors import ConfigError, EvalkitError
+from evalkit.errors import ConfigError, EvalkitError, SuiteError
 from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
 from evalkit.report_json import write_json_report
@@ -94,6 +95,18 @@ def _load_suites(config: Config, suites: tuple[str, ...], cwd: Path) -> list[Sui
     return [load_suite(path, cwd=cwd) for path in paths]
 
 
+def _filter_suites(loaded: list[Suite], pattern: str) -> list[Suite]:
+    """Keep only cases whose ``suite/case`` key contains ``pattern`` (plain substring)."""
+    filtered = []
+    for suite in loaded:
+        cases = tuple(c for c in suite.cases if pattern in f"{suite.name}/{c.name}")
+        if cases:
+            filtered.append(replace(suite, cases=cases))
+    if not filtered:
+        raise SuiteError(f"No cases match '-k {pattern}'.")
+    return filtered
+
+
 def _require_provider(config: Config) -> None:
     if not config.api_key:
         raise ConfigError("API key missing or invalid. Set EVALKIT_API_KEY.")
@@ -122,6 +135,7 @@ def _run_impl(
     no_cache: bool,
     no_color: bool,
     concurrency: int | None,
+    pattern: str | None,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
@@ -130,6 +144,8 @@ def _run_impl(
     cwd = Path.cwd()
     config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd, concurrency)
     loaded = _load_suites(config, suites, cwd)
+    if pattern:
+        loaded = _filter_suites(loaded, pattern)
     _require_provider(config)
     result, console = _execute(config, loaded, cwd)
 
@@ -196,6 +212,7 @@ def cli() -> None:
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
 @click.option("--concurrency", type=int, default=None, help="Worker pool size (default 4).")
+@click.option("-k", "pattern", default=None, help="Run only cases whose suite/case key matches.")
 @click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
 @click.option("--junit", "junit_path", type=click.Path(), default=None, help="Write JUnit XML.")
 @click.option(
@@ -219,6 +236,7 @@ def run(
     no_cache: bool,
     no_color: bool,
     concurrency: int | None,
+    pattern: str | None,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
@@ -234,6 +252,7 @@ def run(
             no_cache,
             no_color,
             concurrency,
+            pattern,
             json_path,
             junit_path,
             fail_on_cost,

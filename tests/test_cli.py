@@ -261,6 +261,42 @@ def test_baseline_rejects_report_flags(project):
     assert result.exit_code == 2  # --json is not a baseline option
 
 
+TWO_CASE_SUITE = """
+suite: demo
+model: example-model-1
+prompt: "Reply about {{topic}}"
+cases:
+  - name: refund-flow
+    vars: {topic: refunds}
+    assert: [{type: contains, value: reply}]
+  - name: checkout-flow
+    vars: {topic: checkout}
+    assert: [{type: contains, value: reply}]
+"""
+
+
+def test_k_filter_runs_matching_cases(project):
+    project.write_suite(TWO_CASE_SUITE)
+    result = project(["run", "-k", "refund"])
+    assert result.exit_code == 0
+    assert "refund-flow" in result.output
+    assert "checkout-flow" not in result.output
+    assert "cases: 1" in result.output  # summary reflects the filtered set
+
+
+def test_k_filter_no_match_exits_2(project):
+    project.write_suite(TWO_CASE_SUITE)
+    result = project(["run", "-k", "nomatch"])
+    assert result.exit_code == 2
+    assert "No cases match '-k nomatch'." in result.output
+
+
+def test_baseline_rejects_k_filter(project):
+    project.write_suite(TWO_CASE_SUITE)
+    result = project(["baseline", "-k", "refund"])
+    assert result.exit_code == 2  # -k is not a baseline option
+
+
 def test_json_report_includes_baseline(project):
     project.write_suite(PASSING_SUITE)
     project(["baseline"])

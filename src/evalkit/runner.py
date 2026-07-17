@@ -131,48 +131,96 @@ def _judge_call(
     judge_model: str,
     config: Config,
     client: httpx.Client,
+    cache_root: Path,
     sample: int,
-) -> tuple[object, float | None]:
-    """Return (Verdict, cost). Retry once with a JSON-only nudge; then raise JudgeError."""
+) -> tuple[object, float | None, bool]:
+    """Return (Verdict, cost, cached). Retry once with a JSON-only nudge; then raise JudgeError.
+
+    The judge call is cached with the same mechanism as the case call. The key embeds the
+    base (non-retry) judge prompt, which already contains the response and rubric, so the
+    key changes whenever either does.
+    """
+    base_content = build_judge_messages(assertion.rubric or "", response_text)[0]["content"]
+    key = cache_key(judge_model, None, base_content, JUDGE_PARAMS, sample)
+
+    entry = read_cache(cache_root, key) if config.cache else None
+    if entry is not None:
+        verdict = parse_verdict(entry.response_text)
+        if verdict is not None:
+            cost = case_cost(
+                config.pricing, judge_model, entry.prompt_tokens, entry.completion_tokens
+            )
+            return verdict, cost, True
+
     for attempt in range(2):
         messages = build_judge_messages(assertion.rubric or "", response_text, retry=attempt == 1)
         resp = complete_chat(client, judge_model, messages, JUDGE_PARAMS)
         cost = case_cost(config.pricing, judge_model, resp.prompt_tokens, resp.completion_tokens)
         verdict = parse_verdict(resp.text)
         if verdict is not None:
-            return verdict, cost
+            write_cache(
+                cache_root,
+                key,
+                CacheEntry(
+                    resp.text,
+                    resp.prompt_tokens,
+                    resp.completion_tokens,
+                    resp.latency_ms,
+                    _now_iso(),
+                    judge_model,
+                ),
+            )
+            return verdict, cost, False
     raise JudgeError()
 
 
-def _evaluate(
-    case: Case,
-    text: str,
-    config: Config,
-    client: httpx.Client,
-) -> tuple[list[Failure], float, bool, str | None, str | None]:
-    """Evaluate all assertions, returning failures, judge cost, and judge accounting flags.
+@dataclass
+class _Eval:
+    """Outcome of evaluating one case's assertions (deterministic plus judge)."""
 
-    The last element is a judge error reason (not None => the case is an error).
-    """
+    failures: list[Failure]
+    judge_cost: float
+    judge_cost_known: bool
+    judge_model: str | None
+    judge_cached: bool
+    error: str | None
+
+
+def _evaluate(
+    case: Case, text: str, config: Config, client: httpx.Client, cache_root: Path
+) -> _Eval:
+    """Evaluate all assertions. A non-None ``error`` means the case is an error."""
     failures: list[Failure] = []
     judge_cost = 0.0
     judge_cost_known = True
     judge_model: str | None = None
+    judge_cached = True
     for assertion in case.assertions:
         if assertion.type == "judge":
             judge_model = config.judge_model or config.default_model or ""
             try:
-                verdict, cost = _judge_call(assertion, text, judge_model, config, client, 0)
+                verdict, cost, cached = _judge_call(
+                    assertion, text, judge_model, config, client, cache_root, 0
+                )
             except JudgeError:
-                return (
+                return _Eval(
                     failures,
                     judge_cost,
                     judge_cost_known,
                     judge_model,
-                    ("judge: returned an unparseable verdict"),
+                    judge_cached,
+                    "judge: returned an unparseable verdict",
                 )
             except ProviderCallError as exc:
-                return failures, judge_cost, judge_cost_known, judge_model, f"judge: {exc.reason}"
+                return _Eval(
+                    failures,
+                    judge_cost,
+                    judge_cost_known,
+                    judge_model,
+                    judge_cached,
+                    f"judge: {exc.reason}",
+                )
+            judge_cached = judge_cached and cached
             if cost is None:
                 judge_cost_known = False
             else:
@@ -183,7 +231,7 @@ def _evaluate(
             passed, message = evaluate_assertion(assertion, text)
             if not passed:
                 failures.append(Failure(assertion.type, message, sample=1))
-    return failures, judge_cost, judge_cost_known, judge_model, None
+    return _Eval(failures, judge_cost, judge_cost_known, judge_model, judge_cached, None)
 
 
 def run_case(
@@ -222,13 +270,11 @@ def run_case(
             CacheEntry(text, prompt_tokens, completion_tokens, latency_ms, _now_iso(), model),
         )
 
-    failures, judge_cost, judge_cost_known, judge_model, judge_error = _evaluate(
-        case, text, config, client
-    )
-    if judge_error is not None:
-        return _error_case(suite, case, model, judge_error, judge_cost)
+    ev = _evaluate(case, text, config, client, cache_root)
+    if ev.error is not None:
+        return _error_case(suite, case, model, ev.error, ev.judge_cost)
 
-    status = "pass" if not failures else "fail"
+    status = "pass" if not ev.failures else "fail"
     return CaseResult(
         suite=suite.name,
         name=case.name,
@@ -239,14 +285,14 @@ def run_case(
         samples_passed=1 if status == "pass" else 0,
         threshold=case.threshold,
         latency_ms=latency_ms,
-        cached=cached,
+        cached=cached and ev.judge_cached,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         cost_usd=case_cost(config.pricing, model, prompt_tokens, completion_tokens),
-        judge_cost_usd=judge_cost,
-        judge_model=judge_model,
-        judge_cost_known=judge_cost_known,
-        failures=failures,
+        judge_cost_usd=ev.judge_cost,
+        judge_model=ev.judge_model,
+        judge_cost_known=ev.judge_cost_known,
+        failures=ev.failures,
     )
 
 

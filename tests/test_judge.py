@@ -132,6 +132,19 @@ def test_judge_fail_surfaces_reason(tmp_path, transport_factory):
     assert judge_failure.message == f"judge: {reason}"
 
 
+def test_judge_call_is_cached_on_rerun(tmp_path, transport_factory):
+    client, rec = _client(transport_factory, _handler('{"pass": true, "reason": "fine"}'))
+    suite = _suite(tmp_path)
+    cache_root = tmp_path / "cache"
+    run_suites([suite], _config(), client, cache_root)
+    calls = rec.call_count  # one case call + one judge call
+    result = run_suites([suite], _config(), client, cache_root)
+    assert rec.call_count == calls  # no new calls: both case and judge replayed from cache
+    case = result.suites[0].cases[0]
+    assert case.cached is True
+    assert case.judge_cost_usd > 0  # modeled judge cost still attributed on a cached replay
+
+
 def test_unparseable_verdict_is_error(tmp_path, transport_factory):
     client, rec = _client(transport_factory, _handler("not json at all"))
     result = run_suites([_suite(tmp_path)], _config(), client, tmp_path / "cache")

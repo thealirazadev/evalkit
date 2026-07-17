@@ -21,6 +21,7 @@ from evalkit.config import load_config
 from evalkit.errors import ConfigError, EvalkitError
 from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
+from evalkit.report_json import write_json_report
 from evalkit.report_terminal import render_report
 from evalkit.runner import exit_code, run_suites
 from evalkit.suite import discover_suites, load_suite
@@ -62,6 +63,7 @@ def _run_impl(
     model: str | None,
     no_cache: bool,
     no_color: bool,
+    json_path: str | None,
 ) -> int:
     load_dotenv()
     configure_logging()
@@ -91,6 +93,8 @@ def _run_impl(
     finally:
         client.close()
     render_report(console, result)
+    if json_path:
+        write_json_report(result, config, json_path)
     return exit_code(result)
 
 
@@ -106,15 +110,17 @@ def cli() -> None:
 @click.option("--model", default=None, help="Override the case model.")
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
+@click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
 def run(
     suites: tuple[str, ...],
     config_path: str | None,
     model: str | None,
     no_cache: bool,
     no_color: bool,
+    json_path: str | None,
 ) -> None:
     """Run suites and report pass/fail with cost and latency."""
-    code = _boundary(lambda: _run_impl(suites, config_path, model, no_cache, no_color))
+    code = _boundary(lambda: _run_impl(suites, config_path, model, no_cache, no_color, json_path))
     raise SystemExit(code)
 
 

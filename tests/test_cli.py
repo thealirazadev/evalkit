@@ -151,6 +151,25 @@ def test_second_run_is_cached(project):
     assert calls == 1
 
 
+def test_json_report_written(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--json", "out.json"])
+    assert result.exit_code == 0
+    import json as _json
+
+    report = _json.loads((project.tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert report["totals"]["cases"] == 1
+    assert report["totals"]["passed"] == 1
+
+
+def test_json_report_unwritable_exits_2(project):
+    project.write_suite(PASSING_SUITE)
+    (project.tmp_path / "adir").mkdir()
+    result = project(["run", "--json", "adir"])  # a directory, not writable as a file
+    assert result.exit_code == 2
+    assert "Cannot write report" in result.output
+
+
 def test_no_color_output_has_no_escape_codes(project):
     project.write_suite(PASSING_SUITE)
     result = project(["run"], env={"EVALKIT_API_KEY": "secret-key", "NO_COLOR": "1"})

@@ -79,7 +79,7 @@ def test_version():
 def test_run_help_lists_flags():
     result = CliRunner().invoke(cli, ["run", "--help"])
     assert result.exit_code == 0
-    for flag in ("--config", "--model", "--no-cache", "--no-color"):
+    for flag in ("--config", "--model", "--judge-model", "--no-cache", "--no-color", "--json"):
         assert flag in result.output
 
 

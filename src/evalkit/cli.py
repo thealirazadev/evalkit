@@ -68,6 +68,7 @@ def _run_impl(
     suites: tuple[str, ...],
     config_path: str | None,
     model: str | None,
+    judge_model: str | None,
     no_cache: bool,
     no_color: bool,
     json_path: str | None,
@@ -80,6 +81,7 @@ def _run_impl(
     config = load_config(
         config_path=config_path,
         cli_model=model,
+        cli_judge_model=judge_model,
         cli_no_cache=no_cache,
         cli_no_color=no_color,
         env=os.environ,
@@ -132,6 +134,7 @@ def cli() -> None:
 @click.argument("suites", nargs=-1)
 @click.option("--config", "config_path", type=click.Path(), default=None, help="Config file path.")
 @click.option("--model", default=None, help="Override the case model.")
+@click.option("--judge-model", "judge_model", default=None, help="Override the judge model.")
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
 @click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
@@ -146,6 +149,7 @@ def run(
     suites: tuple[str, ...],
     config_path: str | None,
     model: str | None,
+    judge_model: str | None,
     no_cache: bool,
     no_color: bool,
     json_path: str | None,
@@ -155,7 +159,15 @@ def run(
     """Run suites and report pass/fail with cost and latency."""
     code = _boundary(
         lambda: _run_impl(
-            suites, config_path, model, no_cache, no_color, json_path, junit_path, fail_on_cost
+            suites,
+            config_path,
+            model,
+            judge_model,
+            no_cache,
+            no_color,
+            json_path,
+            junit_path,
+            fail_on_cost,
         )
     )
     raise SystemExit(code)

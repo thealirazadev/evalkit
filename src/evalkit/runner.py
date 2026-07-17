@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -453,7 +454,11 @@ def exit_code(run: RunResult) -> int:
 
 
 def run_suites(
-    suites: list[Suite], config: Config, client: httpx.Client, cache_root: Path
+    suites: list[Suite],
+    config: Config,
+    client: httpx.Client,
+    cache_root: Path,
+    progress: Callable[[int, str], None] | None = None,
 ) -> RunResult:
     """Run all cases through a bounded worker pool; results render in suite-file order."""
     start = time.perf_counter()
@@ -471,8 +476,13 @@ def run_suites(
             executor.submit(run_case, suite, case, config, client, cache_root): (si, ci)
             for si, ci, suite, case in tasks
         }
+        done = 0
         for future in as_completed(futures):
-            results[futures[future]] = future.result()
+            result = future.result()
+            results[futures[future]] = result
+            done += 1
+            if progress is not None:
+                progress(done, result.key)
     finally:
         # cancel_futures drops not-yet-started tasks so Ctrl-C returns promptly.
         executor.shutdown(wait=False, cancel_futures=True)

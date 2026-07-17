@@ -4,7 +4,7 @@ import io
 
 from rich.console import Console
 
-from evalkit.report_terminal import print_liveness, render_report
+from evalkit.report_terminal import ProgressLine, print_liveness, render_report
 from evalkit.runner import CaseResult, Failure, RunResult, RunTotals, SuiteResult
 
 
@@ -159,6 +159,23 @@ def test_baseline_section_rendered():
     assert "new: 1   removed: 0" in out
     assert "cost:  $0.0312 -> $0.0298" in out
     assert "mean latency:  840ms -> 1120ms" in out
+
+
+def test_progress_line_on_terminal():
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=True, width=80)
+    with ProgressLine(console, 2, enabled=True) as progress:
+        progress.update(1, "demo/one")
+    out = buf.getvalue()
+    assert "running 1/2  demo/one" in out
+
+
+def test_progress_line_inert_when_disabled():
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=True, width=80)
+    with ProgressLine(console, 2, enabled=False) as progress:
+        progress.update(1, "demo/one")
+    assert buf.getvalue() == ""
 
 
 def test_baseline_section_clean_shows_none():

@@ -25,7 +25,7 @@ from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
 from evalkit.report_json import write_json_report
 from evalkit.report_junit import write_junit_report
-from evalkit.report_terminal import print_liveness, render_report
+from evalkit.report_terminal import ProgressLine, print_liveness, render_report
 from evalkit.runner import RunResult, exit_code, run_suites
 from evalkit.suite import Suite, discover_suites, load_suite
 
@@ -122,10 +122,19 @@ def _execute(
     config: Config, loaded: list[Suite], cwd: Path, *, quiet: bool = False
 ) -> tuple[RunResult, Console]:
     console = Console(no_color=config.no_color)
-    print_liveness(console, sum(len(s.cases) for s in loaded), quiet=quiet)
+    total = sum(len(s.cases) for s in loaded)
+    print_liveness(console, total, quiet=quiet)  # off-TTY plain line (inert on a TTY)
+    show_progress = console.is_terminal and not quiet
     client = build_client(config.base_url, config.api_key, config.timeout_seconds)
     try:
-        result = run_suites(loaded, config, client, cwd / CACHE_SUBDIR)
+        with ProgressLine(console, total, enabled=show_progress) as progress:
+            result = run_suites(
+                loaded,
+                config,
+                client,
+                cwd / CACHE_SUBDIR,
+                progress=progress.update if show_progress else None,
+            )
     finally:
         client.close()
     return result, console

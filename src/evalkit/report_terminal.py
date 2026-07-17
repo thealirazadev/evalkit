@@ -7,9 +7,11 @@ signal: statuses are words (``pass``/``FAIL``/``ERROR``), warnings are prefixed
 
 from __future__ import annotations
 
+from types import TracebackType
 from typing import Any
 
 from rich.console import Console
+from rich.live import Live
 from rich.text import Text
 
 from evalkit.runner import CaseResult, RunResult
@@ -67,6 +69,39 @@ def _print_suite(console: Console, name: str, file: str, cases: list[CaseResult]
             suffix = f" (sample {failure.sample})" if case.samples > 1 else ""
             console.print(Text(f"        {failure.message}{suffix}", style="dim"), soft_wrap=True)
     console.print()
+
+
+class ProgressLine:
+    """A single transient progress line shown on a TTY, cleared before results print.
+
+    Off a TTY or when disabled it is inert. ``update`` is called from the main thread as
+    each case completes, so no locking is needed.
+    """
+
+    def __init__(self, console: Console, total: int, *, enabled: bool) -> None:
+        self.console = console
+        self.total = total
+        self.enabled = enabled
+        self._live: Live | None = None
+
+    def __enter__(self) -> ProgressLine:
+        if self.enabled:
+            self._live = Live(console=self.console, transient=True, auto_refresh=False)
+            self._live.__enter__()
+        return self
+
+    def update(self, done: int, key: str) -> None:
+        if self._live is not None:
+            self._live.update(Text(f"running {done}/{self.total}  {key}"), refresh=True)
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        if self._live is not None:
+            self._live.__exit__(exc_type, exc, tb)
 
 
 def print_liveness(console: Console, total_cases: int, *, quiet: bool = False) -> None:

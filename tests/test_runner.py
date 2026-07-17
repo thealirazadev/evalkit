@@ -145,6 +145,21 @@ def test_cost_computed_and_partial_flag(tmp_path, transport_factory):
     assert "no pricing for example-model-1" in result2.totals.partial_reason
 
 
+def test_progress_callback_invoked_per_case(tmp_path, transport_factory):
+    client, _ = _client(transport_factory, lambda req, n: chat_response('{"reply": "ok"}'))
+    suite = _suite(tmp_path)  # SUITE_YAML has 2 cases
+    seen = []
+    run_suites(
+        [suite],
+        make_config(),
+        client,
+        tmp_path / "cache",
+        progress=lambda d, k: seen.append((d, k)),
+    )
+    assert [d for d, _ in seen] == [1, 2]  # done count increments once per case
+    assert all("/" in k for _, k in seen)  # keys are suite/case
+
+
 def test_concurrency_bounds_in_flight_and_orders_results(tmp_path, transport_factory):
     import threading
 

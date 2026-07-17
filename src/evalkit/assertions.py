@@ -50,6 +50,15 @@ def _equals(assertion: Assertion, response: str) -> AssertionResult:
     return False, f'equals: response does not equal "{value}"'
 
 
+@_register("regex")
+def _regex(assertion: Assertion, response: str) -> AssertionResult:
+    # Compiled at load time in suite.py, so it is always present and valid here.
+    assert assertion.compiled is not None
+    if assertion.compiled.search(response):
+        return True, None
+    return False, f"regex: /{assertion.pattern}/ did not match response"
+
+
 def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
     """Evaluate one deterministic assertion against the response text."""
     handler = _HANDLERS.get(assertion.type)

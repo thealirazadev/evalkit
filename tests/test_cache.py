@@ -1,6 +1,6 @@
-"""Cache key stability and sensitivity."""
+"""Cache key stability and sensitivity, plus read/write round trips."""
 
-from evalkit.cache import cache_key
+from evalkit.cache import CacheEntry, cache_key, read_cache, write_cache
 
 
 def _key(**over):
@@ -43,3 +43,43 @@ def test_param_order_does_not_change_key():
 
 def test_sample_changes_key():
     assert _key(sample=0) != _key(sample=1)
+
+
+def _entry():
+    return CacheEntry(
+        response_text="hello",
+        prompt_tokens=10,
+        completion_tokens=5,
+        latency_ms=120,
+        created_at="2026-07-18T10:00:00Z",
+        model="m",
+    )
+
+
+def test_read_miss_returns_none(tmp_path):
+    assert read_cache(tmp_path, "deadbeef") is None
+
+
+def test_write_then_read_round_trip(tmp_path):
+    write_cache(tmp_path, "abcd1234", _entry())
+    loaded = read_cache(tmp_path, "abcd1234")
+    assert loaded is not None
+    assert loaded.response_text == "hello"
+    assert loaded.prompt_tokens == 10
+    assert loaded.latency_ms == 120
+    # Sharded by the first two hex chars.
+    assert (tmp_path / "ab" / "abcd1234.json").exists()
+
+
+def test_corrupt_entry_is_a_miss(tmp_path):
+    path = tmp_path / "ff" / "ffee.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{ not json", encoding="utf-8")
+    assert read_cache(tmp_path, "ffee") is None
+
+
+def test_version_mismatch_is_a_miss(tmp_path):
+    write_cache(tmp_path, "ab00", _entry())
+    path = tmp_path / "ab" / "ab00.json"
+    path.write_text('{"version": 99, "response_text": "x", "latency_ms": 1}', encoding="utf-8")
+    assert read_cache(tmp_path, "ab00") is None

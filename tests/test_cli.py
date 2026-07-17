@@ -221,3 +221,54 @@ def test_off_tty_liveness_and_plain_output(project):
     assert result.exit_code == 0
     assert "running 1 cases..." in result.output
     assert "\x1b" not in result.output  # no escape codes when piped
+
+
+def test_baseline_store_then_diff_shows_regression(project):
+    project.write_suite(PASSING_SUITE)
+    stored = project(["baseline"])
+    assert stored.exit_code == 0
+    assert "Baseline stored" in stored.output
+    assert (project.tmp_path / ".evalkit" / "baseline.json").exists()
+
+    # Same prompt (cached response), stricter assertion -> the case regresses.
+    project.write_suite(FAILING_SUITE)
+    result = project(["run"])
+    assert result.exit_code == 1
+    assert "regressions: demo/ok" in result.output
+
+
+def test_baseline_refuses_failing_run(project):
+    project.write_suite(FAILING_SUITE)
+    result = project(["baseline"])
+    assert result.exit_code == 1
+    assert "Baseline not stored: 1 case(s) failing." in result.output
+    assert not (project.tmp_path / ".evalkit" / "baseline.json").exists()
+
+
+def test_run_with_corrupt_baseline_exits_2(project):
+    project.write_suite(PASSING_SUITE)
+    bpath = project.tmp_path / ".evalkit" / "baseline.json"
+    bpath.parent.mkdir(parents=True, exist_ok=True)
+    bpath.write_text("{ corrupt", encoding="utf-8")
+    result = project(["run"])
+    assert result.exit_code == 2
+    assert "run 'evalkit baseline' to recreate" in result.output
+
+
+def test_baseline_rejects_report_flags(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["baseline", "--json", "x.json"])
+    assert result.exit_code == 2  # --json is not a baseline option
+
+
+def test_json_report_includes_baseline(project):
+    project.write_suite(PASSING_SUITE)
+    project(["baseline"])
+    project.write_suite(FAILING_SUITE)
+    result = project(["run", "--json", "out.json"])
+    assert result.exit_code == 1
+    import json as _json
+
+    report = _json.loads((project.tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert report["baseline"] is not None
+    assert report["baseline"]["regressions"] == ["demo/ok"]

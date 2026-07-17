@@ -17,19 +17,21 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from evalkit import __version__
-from evalkit.config import load_config
+from evalkit.baseline import diff_against_baseline, load_baseline, write_baseline
+from evalkit.config import Config, load_config
 from evalkit.errors import ConfigError, EvalkitError
 from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
 from evalkit.report_json import write_json_report
 from evalkit.report_junit import write_junit_report
 from evalkit.report_terminal import print_liveness, render_report
-from evalkit.runner import exit_code, run_suites
-from evalkit.suite import discover_suites, load_suite
+from evalkit.runner import RunResult, exit_code, run_suites
+from evalkit.suite import Suite, discover_suites, load_suite
 
 logger = logging.getLogger(LOGGER_NAME)
 
 CACHE_SUBDIR = Path(".evalkit") / "cache"
+BASELINE_DEFAULT = ".evalkit/baseline.json"
 
 
 def _stderr_console() -> Console:
@@ -64,6 +66,52 @@ def _boundary(work: Callable[[], int]) -> int:
         return 1
 
 
+def _resolve_config(
+    config_path: str | None,
+    model: str | None,
+    judge_model: str | None,
+    no_cache: bool,
+    no_color: bool,
+    cwd: Path,
+) -> Config:
+    load_dotenv()
+    configure_logging()
+    return load_config(
+        config_path=config_path,
+        cli_model=model,
+        cli_judge_model=judge_model,
+        cli_no_cache=no_cache,
+        cli_no_color=no_color,
+        env=os.environ,
+        cwd=cwd,
+    )
+
+
+def _load_suites(config: Config, suites: tuple[str, ...], cwd: Path) -> list[Suite]:
+    paths = discover_suites(list(suites), config.suites_glob, cwd)
+    return [load_suite(path, cwd=cwd) for path in paths]
+
+
+def _require_provider(config: Config) -> None:
+    if not config.api_key:
+        raise ConfigError("API key missing or invalid. Set EVALKIT_API_KEY.")
+    if not config.base_url:
+        raise ConfigError(
+            "No provider base URL. Set EVALKIT_BASE_URL or provider.base_url in evalkit.yaml."
+        )
+
+
+def _execute(config: Config, loaded: list[Suite], cwd: Path) -> tuple[RunResult, Console]:
+    console = Console(no_color=config.no_color)
+    print_liveness(console, sum(len(s.cases) for s in loaded))
+    client = build_client(config.base_url, config.api_key, config.timeout_seconds)
+    try:
+        result = run_suites(loaded, config, client, cwd / CACHE_SUBDIR)
+    finally:
+        client.close()
+    return result, console
+
+
 def _run_impl(
     suites: tuple[str, ...],
     config_path: str | None,
@@ -74,39 +122,19 @@ def _run_impl(
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
+    baseline_path: str,
 ) -> int:
-    load_dotenv()
-    configure_logging()
     cwd = Path.cwd()
-    config = load_config(
-        config_path=config_path,
-        cli_model=model,
-        cli_judge_model=judge_model,
-        cli_no_cache=no_cache,
-        cli_no_color=no_color,
-        env=os.environ,
-        cwd=cwd,
-    )
-    suite_paths = discover_suites(list(suites), config.suites_glob, cwd)
-    loaded = [load_suite(path, cwd=cwd) for path in suite_paths]
+    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd)
+    loaded = _load_suites(config, suites, cwd)
+    _require_provider(config)
+    result, console = _execute(config, loaded, cwd)
 
-    if not config.api_key:
-        raise ConfigError("API key missing or invalid. Set EVALKIT_API_KEY.")
-    if not config.base_url:
-        raise ConfigError(
-            "No provider base URL. Set EVALKIT_BASE_URL or provider.base_url in evalkit.yaml."
-        )
-
-    console = Console(no_color=config.no_color)
-    print_liveness(console, sum(len(s.cases) for s in loaded))
-    client = build_client(config.base_url, config.api_key, config.timeout_seconds)
-    try:
-        result = run_suites(loaded, config, client, cwd / CACHE_SUBDIR)
-    finally:
-        client.close()
-    render_report(console, result)
+    baseline = load_baseline(baseline_path)
+    diff = diff_against_baseline(baseline, result, baseline_path) if baseline else None
+    render_report(console, result, baseline=baseline, diff=diff)
     if json_path:
-        write_json_report(result, config, json_path)
+        write_json_report(result, config, json_path, diff)
     if junit_path:
         write_junit_report(result, junit_path)
 
@@ -122,6 +150,32 @@ def _run_impl(
             )
             code = max(code, 1)
     return code
+
+
+def _baseline_impl(
+    suites: tuple[str, ...],
+    config_path: str | None,
+    model: str | None,
+    judge_model: str | None,
+    no_cache: bool,
+    no_color: bool,
+    baseline_path: str,
+) -> int:
+    cwd = Path.cwd()
+    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd)
+    loaded = _load_suites(config, suites, cwd)
+    _require_provider(config)
+    result, console = _execute(config, loaded, cwd)
+    render_report(console, result)
+
+    code = exit_code(result)
+    if code != 0:
+        failing = result.totals.failed + result.totals.errors
+        _fail(f"Error: Baseline not stored: {failing} case(s) failing.")
+        return code
+    write_baseline(result, config, baseline_path)
+    console.print(f"Baseline stored to {baseline_path} ({result.totals.cases} cases).")
+    return 0
 
 
 @click.group()
@@ -145,6 +199,13 @@ def cli() -> None:
     default=None,
     help="Exit 1 if total run cost (USD, incl. judge) exceeds this budget.",
 )
+@click.option(
+    "--baseline",
+    "baseline_path",
+    type=click.Path(),
+    default=BASELINE_DEFAULT,
+    help="Baseline file to diff against when it exists.",
+)
 def run(
     suites: tuple[str, ...],
     config_path: str | None,
@@ -155,6 +216,7 @@ def run(
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
+    baseline_path: str,
 ) -> None:
     """Run suites and report pass/fail with cost and latency."""
     code = _boundary(
@@ -168,16 +230,42 @@ def run(
             json_path,
             junit_path,
             fail_on_cost,
+            baseline_path,
         )
     )
     raise SystemExit(code)
 
 
 @cli.command()
-def baseline() -> None:
-    """Store a passing run as the baseline snapshot (implemented in a later phase)."""
-    _fail("Error: baseline is not implemented yet.")
-    raise SystemExit(2)
+@click.argument("suites", nargs=-1)
+@click.option("--config", "config_path", type=click.Path(), default=None, help="Config file path.")
+@click.option("--model", default=None, help="Override the case model.")
+@click.option("--judge-model", "judge_model", default=None, help="Override the judge model.")
+@click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
+@click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
+@click.option(
+    "--baseline",
+    "baseline_path",
+    type=click.Path(),
+    default=BASELINE_DEFAULT,
+    help="Where to write the baseline snapshot.",
+)
+def baseline(
+    suites: tuple[str, ...],
+    config_path: str | None,
+    model: str | None,
+    judge_model: str | None,
+    no_cache: bool,
+    no_color: bool,
+    baseline_path: str,
+) -> None:
+    """Store a passing run as the baseline snapshot; refuse if any case fails."""
+    code = _boundary(
+        lambda: _baseline_impl(
+            suites, config_path, model, judge_model, no_cache, no_color, baseline_path
+        )
+    )
+    raise SystemExit(code)
 
 
 def main() -> None:

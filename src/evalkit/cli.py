@@ -23,7 +23,7 @@ from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
 from evalkit.report_json import write_json_report
 from evalkit.report_junit import write_junit_report
-from evalkit.report_terminal import render_report
+from evalkit.report_terminal import print_liveness, render_report
 from evalkit.runner import exit_code, run_suites
 from evalkit.suite import discover_suites, load_suite
 
@@ -96,6 +96,7 @@ def _run_impl(
         )
 
     console = Console(no_color=config.no_color)
+    print_liveness(console, sum(len(s.cases) for s in loaded))
     client = build_client(config.base_url, config.api_key, config.timeout_seconds)
     try:
         result = run_suites(loaded, config, client, cwd / CACHE_SUBDIR)

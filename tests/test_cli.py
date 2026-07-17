@@ -213,3 +213,11 @@ def test_no_color_output_has_no_escape_codes(project):
     result = project(["run"], env={"EVALKIT_API_KEY": "secret-key", "NO_COLOR": "1"})
     assert result.exit_code == 0
     assert "\x1b" not in result.output
+
+
+def test_off_tty_liveness_and_plain_output(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run"])  # CliRunner stdout is not a TTY
+    assert result.exit_code == 0
+    assert "running 1 cases..." in result.output
+    assert "\x1b" not in result.output  # no escape codes when piped

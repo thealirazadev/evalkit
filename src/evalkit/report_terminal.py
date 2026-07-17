@@ -67,6 +67,17 @@ def _print_suite(console: Console, name: str, file: str, cases: list[CaseResult]
     console.print()
 
 
+def print_liveness(console: Console, total_cases: int, *, quiet: bool = False) -> None:
+    """Off a TTY, print one plain liveness line so CI logs show the run started.
+
+    On a TTY a live progress display (a later phase) replaces this; under ``--quiet``
+    nothing prints.
+    """
+    if quiet or console.is_terminal:
+        return
+    console.print(f"running {total_cases} cases...")
+
+
 def render_report(console: Console, run: RunResult, *, quiet: bool = False) -> None:
     """Render the full run report: per-suite lines, warnings, and the summary block."""
     for suite in run.suites:

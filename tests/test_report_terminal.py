@@ -4,7 +4,7 @@ import io
 
 from rich.console import Console
 
-from evalkit.report_terminal import render_report
+from evalkit.report_terminal import print_liveness, render_report
 from evalkit.runner import CaseResult, Failure, RunResult, RunTotals, SuiteResult
 
 
@@ -123,3 +123,17 @@ def test_quiet_hides_passing_cases_but_keeps_summary():
     assert "good" not in out
     assert "FAIL  bad" in out
     assert "summary" in out
+
+
+def test_liveness_line_off_tty():
+    buf = io.StringIO()
+    console = Console(file=buf, no_color=True, width=100)  # a file is not a terminal
+    print_liveness(console, 14)
+    assert buf.getvalue().strip() == "running 14 cases..."
+
+
+def test_liveness_suppressed_under_quiet():
+    buf = io.StringIO()
+    console = Console(file=buf, no_color=True, width=100)
+    print_liveness(console, 14, quiet=True)
+    assert buf.getvalue() == ""

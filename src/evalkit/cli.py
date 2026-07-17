@@ -41,6 +41,12 @@ def _fail(message: str) -> None:
     _stderr_console().print(message, style="red", soft_wrap=True)
 
 
+def _fmt_money(value: float) -> str:
+    """Format a USD amount, keeping small budgets legible (e.g. 0.000001, not 0.0000)."""
+    text = f"{value:.6f}".rstrip("0")
+    return text + "00" if text.endswith(".") else text
+
+
 def _boundary(work: Callable[[], int]) -> int:
     """Run a command body, translating exceptions into friendly messages and exit codes."""
     try:
@@ -66,6 +72,7 @@ def _run_impl(
     no_color: bool,
     json_path: str | None,
     junit_path: str | None,
+    fail_on_cost: float | None,
 ) -> int:
     load_dotenv()
     configure_logging()
@@ -99,7 +106,19 @@ def _run_impl(
         write_json_report(result, config, json_path)
     if junit_path:
         write_junit_report(result, junit_path)
-    return exit_code(result)
+
+    code = exit_code(result)
+    if fail_on_cost is not None:
+        if not result.totals.cost_known:
+            reason = result.totals.partial_reason or "cost is partial"
+            raise ConfigError(f"Cannot enforce --fail-on-cost: {reason}")
+        total = result.totals.cost_usd + result.totals.judge_cost_usd
+        if total > fail_on_cost:
+            _fail(
+                f"Error: Cost budget exceeded: ${_fmt_money(total)} > ${_fmt_money(fail_on_cost)}"
+            )
+            code = max(code, 1)
+    return code
 
 
 @click.group()
@@ -116,6 +135,12 @@ def cli() -> None:
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
 @click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
 @click.option("--junit", "junit_path", type=click.Path(), default=None, help="Write JUnit XML.")
+@click.option(
+    "--fail-on-cost",
+    type=float,
+    default=None,
+    help="Exit 1 if total run cost (USD, incl. judge) exceeds this budget.",
+)
 def run(
     suites: tuple[str, ...],
     config_path: str | None,
@@ -124,10 +149,13 @@ def run(
     no_color: bool,
     json_path: str | None,
     junit_path: str | None,
+    fail_on_cost: float | None,
 ) -> None:
     """Run suites and report pass/fail with cost and latency."""
     code = _boundary(
-        lambda: _run_impl(suites, config_path, model, no_cache, no_color, json_path, junit_path)
+        lambda: _run_impl(
+            suites, config_path, model, no_cache, no_color, json_path, junit_path, fail_on_cost
+        )
     )
     raise SystemExit(code)
 

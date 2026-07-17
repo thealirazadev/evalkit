@@ -181,6 +181,33 @@ def test_junit_report_written(project):
     assert tree.getroot().attrib["tests"] == "1"
 
 
+def test_fail_on_cost_over_budget_exits_1(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--fail-on-cost", "0.000001"])
+    assert result.exit_code == 1
+    assert "Cost budget exceeded" in result.output
+    assert "0.000001" in result.output
+
+
+def test_fail_on_cost_under_budget_exits_0(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--fail-on-cost", "100"])
+    assert result.exit_code == 0
+    assert "Cost budget exceeded" not in result.output
+
+
+def test_fail_on_cost_unenforceable_exits_2(project):
+    # A config without pricing makes cost unknown; the budget cannot be enforced.
+    (project.tmp_path / "evalkit.yaml").write_text(
+        "provider:\n  base_url: https://api.example.com/v1\n  model: example-model-1\n",
+        encoding="utf-8",
+    )
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--fail-on-cost", "0.01"])
+    assert result.exit_code == 2
+    assert "Cannot enforce --fail-on-cost" in result.output
+
+
 def test_no_color_output_has_no_escape_codes(project):
     project.write_suite(PASSING_SUITE)
     result = project(["run"], env={"EVALKIT_API_KEY": "secret-key", "NO_COLOR": "1"})

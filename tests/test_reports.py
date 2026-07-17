@@ -1,6 +1,7 @@
 """JSON report: documented schema, judge reasons, and write errors."""
 
 import json
+import xml.etree.ElementTree as ET
 
 import jsonschema
 import pytest
@@ -10,6 +11,7 @@ from evalkit.config import Config
 from evalkit.errors import ReportError
 from evalkit.provider import build_client
 from evalkit.report_json import build_report, write_json_report
+from evalkit.report_junit import build_junit, write_junit_report
 from evalkit.runner import run_suites
 from evalkit.suite import load_suite
 
@@ -189,3 +191,52 @@ def test_unwritable_path_raises_report_error(tmp_path, transport_factory):
         write_json_report(run, _config(), str(tmp_path))
     assert exc.value.exit_code == 2
     assert "Cannot write report" in exc.value.message
+
+
+def test_junit_structure_and_judge_reason(tmp_path, transport_factory):
+    run = _run(tmp_path, transport_factory)
+    root = build_junit(run)
+    assert root.tag == "testsuites"
+    assert root.attrib["tests"] == "2"
+    assert root.attrib["failures"] == "1"
+
+    testsuite = root.find("testsuite")
+    assert testsuite.attrib["name"] == "demo"
+    cases = {tc.attrib["name"]: tc for tc in testsuite.findall("testcase")}
+    assert cases["good"].attrib["classname"] == "demo"
+    assert "time" in cases["good"].attrib
+    assert cases["good"].find("failure") is None
+
+    failure = cases["bad"].find("failure")
+    assert failure is not None
+    assert "judge: promises a refund" in failure.attrib["message"]
+    assert "judge: promises a refund" in failure.text
+
+
+def test_junit_error_element(tmp_path, transport_factory):
+    import httpx
+
+    path = tmp_path / "s.yaml"
+    path.write_text(SUITE, encoding="utf-8")
+    suite = load_suite(path, cwd=tmp_path)
+    rec = transport_factory(lambda req, n: httpx.Response(503))
+    client = build_client("https://api.example.com/v1", "secret-key", 5.0, rec.transport)
+    run = run_suites([suite], _config(), client, tmp_path / "cache")
+    root = build_junit(run)
+    error = root.find("testsuite/testcase/error")
+    assert error is not None
+    assert "provider: 503" in error.attrib["message"]
+
+
+def test_junit_file_parses(tmp_path, transport_factory):
+    run = _run(tmp_path, transport_factory)
+    out = tmp_path / "junit.xml"
+    write_junit_report(run, str(out))
+    tree = ET.parse(out)  # a standard JUnit consumer parses valid XML
+    assert tree.getroot().tag == "testsuites"
+
+
+def test_junit_unwritable_path_raises(tmp_path, transport_factory):
+    run = _run(tmp_path, transport_factory)
+    with pytest.raises(ReportError):
+        write_junit_report(run, str(tmp_path))

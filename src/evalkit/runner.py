@@ -55,6 +55,7 @@ class CaseResult:
     judge_cost_known: bool = True
     failures: list[Failure] = field(default_factory=list)
     error: str | None = None
+    response_excerpt: str = ""
 
 
 @dataclass
@@ -251,6 +252,7 @@ class _Sample:
     judge_cost_known: bool
     judge_model: str | None
     error: str | None
+    text: str = ""
 
 
 def _mean(values: list[int]) -> float:
@@ -327,6 +329,7 @@ def _run_sample(
         judge_cost_known=ev.judge_cost_known,
         judge_model=ev.judge_model,
         error=ev.error,
+        text=text,
     )
 
 
@@ -377,6 +380,7 @@ def run_case(
         judge_model=next((s.judge_model for s in samples if s.judge_model), None),
         judge_cost_known=all(s.judge_cost_known for s in samples),
         failures=failures,
+        response_excerpt=samples[0].text[:300] if samples else "",
     )
 
 

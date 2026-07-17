@@ -170,6 +170,17 @@ def test_json_report_unwritable_exits_2(project):
     assert "Cannot write report" in result.output
 
 
+def test_junit_report_written(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--junit", "out.xml"])
+    assert result.exit_code == 0
+    import xml.etree.ElementTree as ET
+
+    tree = ET.parse(project.tmp_path / "out.xml")
+    assert tree.getroot().tag == "testsuites"
+    assert tree.getroot().attrib["tests"] == "1"
+
+
 def test_no_color_output_has_no_escape_codes(project):
     project.write_suite(PASSING_SUITE)
     result = project(["run"], env={"EVALKIT_API_KEY": "secret-key", "NO_COLOR": "1"})

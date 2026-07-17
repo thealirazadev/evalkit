@@ -35,9 +35,17 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   153 passed, ruff + black clean; manual e2e against the local mock confirmed store-on-pass,
   refuse-on-fail, regression diff with deltas, and cached-response reuse driving the flip.
 
+- Phase 4 COMPLETE and verified. Runner executes cases through a `ThreadPoolExecutor` sized by
+  `--concurrency`/`run.concurrency` (default 4); results render in suite-file order; Ctrl-C cancels
+  pending futures (boundary exits 130). Added `-k` substring filter (exit 2 with the documented
+  message on no match; a usage error for `baseline`), `--quiet`/`--verbose` (verbose wins; structured
+  per-sample and per-request key=value debug logs to stderr that never include the key), and a
+  transient TTY progress line (`ProgressLine`, inert off-TTY/under `--quiet`). Verified `uv run
+  pytest` 163 passed, ruff + black clean.
+
 ## In progress
 
-- Phase 4: concurrency (bounded worker pool), `-k` filter, `--quiet`/`--verbose`, TTY progress line.
+- Finalization: README, example suite/config under `evals/`, launch-checklist review, full gate.
 
 ## Decisions log
 

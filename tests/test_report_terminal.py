@@ -137,3 +137,40 @@ def test_liveness_suppressed_under_quiet():
     console = Console(file=buf, no_color=True, width=100)
     print_liveness(console, 14, quiet=True)
     assert buf.getvalue() == ""
+
+
+def test_baseline_section_rendered():
+    baseline = {
+        "created_at": "2026-07-01T10:00:00Z",
+        "totals": {"cost_usd": 0.0312, "mean_latency_ms": 840.0},
+    }
+    diff = {
+        "path": ".evalkit/baseline.json",
+        "regressions": ["demo/bad"],
+        "fixed": [],
+        "new": ["demo/added"],
+        "removed": [],
+        "cost_delta_usd": -0.0014,
+        "mean_latency_delta_ms": 280.0,
+    }
+    out = _render(_run([_case("bad", "fail")], _totals()), baseline=baseline, diff=diff)
+    assert "baseline  (.evalkit/baseline.json, created 2026-07-01)" in out
+    assert "regressions: demo/bad" in out
+    assert "new: 1   removed: 0" in out
+    assert "cost:  $0.0312 -> $0.0298" in out
+    assert "mean latency:  840ms -> 1120ms" in out
+
+
+def test_baseline_section_clean_shows_none():
+    baseline = {"created_at": "2026-07-01", "totals": {"cost_usd": 0.03, "mean_latency_ms": 800.0}}
+    diff = {
+        "path": "b.json",
+        "regressions": [],
+        "fixed": [],
+        "new": [],
+        "removed": [],
+        "cost_delta_usd": 0.0,
+        "mean_latency_delta_ms": 0.0,
+    }
+    out = _render(_run([_case("ok", "pass")], _totals()), baseline=baseline, diff=diff)
+    assert "regressions: none" in out

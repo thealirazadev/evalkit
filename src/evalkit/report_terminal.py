@@ -7,6 +7,8 @@ signal: statuses are words (``pass``/``FAIL``/``ERROR``), warnings are prefixed
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Console
 from rich.text import Text
 
@@ -78,13 +80,55 @@ def print_liveness(console: Console, total_cases: int, *, quiet: bool = False) -
     console.print(f"running {total_cases} cases...")
 
 
-def render_report(console: Console, run: RunResult, *, quiet: bool = False) -> None:
-    """Render the full run report: per-suite lines, warnings, and the summary block."""
+def _pct(old: float, new: float) -> str:
+    if not old:
+        return "(n/a)"
+    return f"({(new - old) / old * 100:+.1f}%)"
+
+
+def _print_baseline_section(
+    console: Console, baseline: dict[str, Any], diff: dict[str, Any]
+) -> None:
+    created = str(baseline.get("created_at", ""))[:10]
+    console.print(Text(f"baseline  ({diff['path']}, created {created})", style="bold"))
+
+    regressions = diff["regressions"]
+    line = Text("  regressions: ")
+    if regressions:
+        line.append(", ".join(regressions), style="red")
+    else:
+        line.append("none", style="green")
+    console.print(line)
+    console.print(f"  new: {len(diff['new'])}   removed: {len(diff['removed'])}")
+
+    base_totals = baseline.get("totals", {})
+    old_cost = base_totals.get("cost_usd", 0.0)
+    new_cost = old_cost + diff["cost_delta_usd"]
+    console.print(f"  cost:  ${old_cost:.4f} -> ${new_cost:.4f}  {_pct(old_cost, new_cost)}")
+
+    old_lat = base_totals.get("mean_latency_ms", 0.0)
+    new_lat = old_lat + diff["mean_latency_delta_ms"]
+    console.print(f"  mean latency:  {old_lat:.0f}ms -> {new_lat:.0f}ms  {_pct(old_lat, new_lat)}")
+    console.print()
+
+
+def render_report(
+    console: Console,
+    run: RunResult,
+    *,
+    baseline: dict[str, Any] | None = None,
+    diff: dict[str, Any] | None = None,
+    quiet: bool = False,
+) -> None:
+    """Render the full run report: per-suite lines, baseline section, and the summary block."""
     for suite in run.suites:
         cases = suite.cases if not quiet else [c for c in suite.cases if c.status != "pass"]
         if not cases:
             continue
         _print_suite(console, suite.name, suite.file, cases)
+
+    if baseline is not None and diff is not None:
+        _print_baseline_section(console, baseline, diff)
 
     totals = run.totals
     if not totals.cost_known and totals.partial_reason:

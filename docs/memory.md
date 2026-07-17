@@ -18,12 +18,28 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   `evalkit --version`/`run --help` work; manual exit-code checks pass (no-suites=2, missing-key=2,
   provider-unreachable retries then exit 2 with no traceback).
 
+- Phase 2 COMPLETE and verified. Added: `judge.py` (prompt build, verdict parsing, JSON-only
+  retry), judge evaluation wired into the runner with judge-model resolution, judge-call caching,
+  and cost broken out; N-sample looping with per-sample cache keys and threshold; `report_json.py`
+  (`--json`) and `report_junit.py` (`--junit`) with response excerpts and judge reasons; budget
+  enforcement (`--fail-on-cost`, exit 1 over budget, exit 2 when unenforceable); off-TTY plain
+  liveness line. Verified `uv run pytest` 140 passed, ruff + black clean; manual end-to-end against a
+  local mock HTTP server confirmed judge failure with surfaced reason, JSON/JUnit output, judge cost
+  breakout, caching (incl. judge) on re-run, and budget exit 1.
+
 ## In progress
 
-- Phase 2: judge assertion, N-sample mode, JSON + JUnit reports, `--fail-on-cost`, non-TTY output.
+- Phase 3: baseline snapshot (`evalkit baseline`) and regression diff (terminal + JSON).
 
 ## Decisions log
 
+- N-sample threshold comparison: the passing fraction is compared to the threshold at 2-decimal
+  precision (`round(passed/samples, 2) >= round(threshold, 2)`). Required so that 2/3 = 0.6667 passes
+  the documented `threshold: 0.67` (PRD success criterion 8); a naive float compare would fail it.
+- `--fail-on-cost` uses modeled total cost (case + judge). When cost is partial (missing pricing or
+  usage) the budget cannot be enforced honestly, so the run exits 2 (`Cannot enforce --fail-on-cost:
+  ...`). Over-budget prints the message and raises the exit code to at least 1 without overriding a
+  pre-existing exit 2 (error precedence preserved).
 - Cost model (resolves an ambiguity in architecture.md's "cached contributes $0 to run spend"):
   per-case `cost_usd` is the modeled cost (tokens x pricing), computed for cached and fresh cases
   alike; the run total is the sum of per-case modeled costs. Caching savings are reported via the

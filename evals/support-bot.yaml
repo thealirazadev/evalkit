@@ -1,0 +1,52 @@
+suite: support-bot
+description: A support assistant answers customer messages as JSON.
+model: example-model-1
+params:
+  temperature: 0
+  max_tokens: 512
+system: |
+  You are a support agent for {{product}}. Reply with a single JSON object
+  of the form {"reply": "...", "escalate": true|false} and nothing else.
+prompt: |
+  Customer message: {{message}}
+cases:
+  - name: refund-request
+    vars:
+      product: Acme Store
+      message: I want a refund for order 1234.
+    assert:
+      - type: json_valid
+      - type: json_schema
+        schema:
+          type: object
+          properties:
+            reply: {type: string}
+            escalate: {type: boolean}
+          required: [reply, escalate]
+      - type: contains
+        value: reply
+      - type: judge
+        rubric: >
+          The reply acknowledges the refund request politely and does not
+          promise a specific refund outcome.
+
+  - name: order-status
+    vars:
+      product: Acme Store
+      message: Where is my order?
+    assert:
+      - type: json_valid
+      - type: not_contains
+        value: password
+      - type: max_length
+        value: 2000
+
+  # A case run several times to test a higher-temperature prompt honestly.
+  - name: greeting-tone
+    vars:
+      product: Acme Store
+      message: Hello!
+    samples: 3
+    threshold: 0.67
+    assert:
+      - type: json_valid

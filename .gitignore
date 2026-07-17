@@ -1,0 +1,21 @@
+# Secrets and local environment
+.env
+
+# Response cache (plaintext provider responses); baseline.json under .evalkit/ stays committable
+.evalkit/cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/

@@ -1,0 +1,61 @@
+[project]
+name = "evalkit"
+version = "0.1.0"
+description = "A command-line prompt regression tester with caching, cost accounting, and CI-grade reports."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Ali Raza" }]
+keywords = ["llm", "prompt", "testing", "regression", "ci", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "click==8.1.7",
+    "rich==13.9.4",
+    "httpx==0.28.1",
+    "PyYAML==6.0.2",
+    "jsonschema==4.23.0",
+    "python-dotenv==1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "ruff==0.8.4",
+    "black==24.10.0",
+]
+
+[project.scripts]
+evalkit = "evalkit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/thealirazadev/evalkit"
+Repository = "https://github.com/thealirazadev/evalkit"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evalkit"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

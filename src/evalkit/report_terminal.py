@@ -55,7 +55,7 @@ def _case_line(case: CaseResult, name_width: int, ratio_width: int) -> Text:
 
 
 def _print_suite(console: Console, name: str, file: str, cases: list[CaseResult]) -> None:
-    console.print(Text(f"{name}  ({file})", style="bold"))
+    console.print(Text(f"{name}  ({file})", style="bold"), soft_wrap=True)
     name_width = max((len(c.name) for c in cases), default=0)
     ratio_width = max((len(_ratio(c)) for c in cases), default=0)
     for case in cases:

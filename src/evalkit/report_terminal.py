@@ -59,10 +59,11 @@ def _print_suite(console: Console, name: str, file: str, cases: list[CaseResult]
     name_width = max((len(c.name) for c in cases), default=0)
     ratio_width = max((len(_ratio(c)) for c in cases), default=0)
     for case in cases:
-        console.print(_case_line(case, name_width, ratio_width))
+        # soft_wrap keeps long reasons/messages on one line for CI log grepping.
+        console.print(_case_line(case, name_width, ratio_width), soft_wrap=True)
         for failure in case.failures:
             suffix = f" (sample {failure.sample})" if case.samples > 1 else ""
-            console.print(Text(f"        {failure.message}{suffix}", style="dim"))
+            console.print(Text(f"        {failure.message}{suffix}", style="dim"), soft_wrap=True)
     console.print()
 
 

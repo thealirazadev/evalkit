@@ -42,3 +42,9 @@ class BudgetError(EvalkitError):
     """A cost budget was exceeded or cannot be enforced."""
 
     exit_code = 1
+
+
+class BaselineError(EvalkitError):
+    """The baseline snapshot file is corrupt or a version we cannot read."""
+
+    exit_code = 2

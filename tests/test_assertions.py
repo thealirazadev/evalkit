@@ -109,3 +109,25 @@ def test_json_schema_validation_failure():
     assert passed is False
     assert message.startswith("json_schema: ")
     assert "escalate" in message
+
+
+def test_max_length_boundary_passes():
+    # len == limit passes.
+    assert evaluate_assertion(Assertion(type="max_length", value=5), "12345") == (True, None)
+
+
+def test_max_length_fail_message():
+    passed, message = evaluate_assertion(Assertion(type="max_length", value=3), "12345")
+    assert passed is False
+    assert message == "max_length: response length 5 exceeds 3"
+
+
+def test_max_length_unicode_counts_characters():
+    assert evaluate_assertion(Assertion(type="max_length", value=3), "áéí") == (True, None)
+
+
+def test_unknown_type_raises():
+    import pytest
+
+    with pytest.raises(ValueError):
+        evaluate_assertion(Assertion(type="judge", rubric="x"), "resp")

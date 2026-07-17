@@ -84,6 +84,14 @@ def _json_schema(assertion: Assertion, response: str) -> AssertionResult:
     return False, f"json_schema: {error.message}"
 
 
+@_register("max_length")
+def _max_length(assertion: Assertion, response: str) -> AssertionResult:
+    limit = int(assertion.value)
+    if len(response) <= limit:
+        return True, None
+    return False, f"max_length: response length {len(response)} exceeds {limit}"
+
+
 def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
     """Evaluate one deterministic assertion against the response text."""
     handler = _HANDLERS.get(assertion.type)

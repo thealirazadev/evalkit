@@ -1,5 +1,7 @@
 """Runner: pass/fail/error status, all-assertions-must-pass, caching, cost."""
 
+import time
+
 from conftest import chat_response
 
 from evalkit.config import Config
@@ -143,6 +145,49 @@ def test_cost_computed_and_partial_flag(tmp_path, transport_factory):
     assert "no pricing for example-model-1" in result2.totals.partial_reason
 
 
+def test_concurrency_bounds_in_flight_and_orders_results(tmp_path, transport_factory):
+    import threading
+
+    cases = "\n".join(
+        f"  - name: c{i}\n    vars: {{topic: t{i}}}\n    assert: [{{type: contains, value: reply}}]"
+        for i in range(8)
+    )
+    text = f"suite: demo\nmodel: example-model-1\nprompt: 'p {{{{topic}}}}'\ncases:\n{cases}\n"
+
+    lock = threading.Lock()
+    state = {"active": 0, "max": 0}
+
+    def handler(req, n):
+        with lock:
+            state["active"] += 1
+            state["max"] = max(state["max"], state["active"])
+        time.sleep(0.02)  # hold the slot so requests overlap
+        with lock:
+            state["active"] -= 1
+        return chat_response('{"reply": "ok"}')
+
+    cfg = Config(
+        base_url="https://api.example.com/v1",
+        api_key="k",
+        default_model="example-model-1",
+        cli_model=None,
+        judge_model="example-model-1",
+        concurrency=4,
+        timeout_seconds=5,
+        cache=False,
+        suites_glob="x",
+        pricing=PRICING,
+        no_color=True,
+        config_path=None,
+    )
+    client, _ = _client(transport_factory, handler)
+    result = run_suites([_suite(tmp_path, text)], cfg, client, tmp_path / "cache")
+    names = [c.name for c in result.suites[0].cases]
+    assert names == [f"c{i}" for i in range(8)]  # file order preserved
+    assert state["max"] <= 4  # never more than 4 in flight
+    assert state["max"] >= 2  # actually ran in parallel
+
+
 NSAMPLE_SUITE = """
 suite: demo
 model: example-model-1
@@ -216,11 +261,15 @@ def test_nsample_cached_replays_identically(tmp_path, transport_factory):
 
 
 def test_exit_code_precedence(tmp_path, transport_factory):
+    import json
+
     import httpx
 
-    # First case (calls 1-3, all retries) errors; second case fails contains -> error wins.
+    # Dispatch by request content so the outcome is deterministic under concurrency:
+    # the "refunds" case errors (persistent 503); the "shipping" case fails its contains.
     def handler(req, n):
-        return httpx.Response(503) if n <= 3 else chat_response('{"reply": "ok"}')
+        content = json.loads(req.content)["messages"][-1]["content"]
+        return httpx.Response(503) if "refunds" in content else chat_response('{"reply": "ok"}')
 
     client, _ = _client(transport_factory, handler)
     result = run_suites([_suite(tmp_path)], make_config(), client, tmp_path / "cache")

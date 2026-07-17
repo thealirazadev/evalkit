@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "created_at": "2026-07-17T23:37:29Z",
+  "evalkit_version": "0.1.0",
+  "model": "example-model-1",
+  "cases": {
+    "support/reply-present": {
+      "status": "pass",
+      "samples": 1,
+      "samples_passed": 1,
+      "cost_usd": 0.00096,
+      "latency_ms": 1
+    }
+  },
+  "totals": {
+    "cases": 1,
+    "cost_usd": 0.00096,
+    "mean_latency_ms": 1.0
+  }
+}

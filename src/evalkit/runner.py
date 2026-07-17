@@ -9,6 +9,7 @@ latency is the mean of fresh (non-cached) samples. Concurrency arrives in a late
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -438,16 +439,35 @@ def exit_code(run: RunResult) -> int:
 def run_suites(
     suites: list[Suite], config: Config, client: httpx.Client, cache_root: Path
 ) -> RunResult:
-    """Run every case in every suite (serially) and assemble the run result."""
+    """Run all cases through a bounded worker pool; results render in suite-file order."""
     start = time.perf_counter()
     started_at = _now_iso()
+
+    tasks = [
+        (si, ci, suite, case)
+        for si, suite in enumerate(suites)
+        for ci, case in enumerate(suite.cases)
+    ]
+    results: dict[tuple[int, int], CaseResult] = {}
+    executor = ThreadPoolExecutor(max_workers=max(1, config.concurrency))
+    try:
+        futures = {
+            executor.submit(run_case, suite, case, config, client, cache_root): (si, ci)
+            for si, ci, suite, case in tasks
+        }
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+    finally:
+        # cancel_futures drops not-yet-started tasks so Ctrl-C returns promptly.
+        executor.shutdown(wait=False, cancel_futures=True)
+
     suite_results = [
         SuiteResult(
             name=suite.name,
             file=suite.file,
-            cases=[run_case(suite, case, config, client, cache_root) for case in suite.cases],
+            cases=[results[(si, ci)] for ci in range(len(suite.cases))],
         )
-        for suite in suites
+        for si, suite in enumerate(suites)
     ]
     totals = _aggregate(suite_results, config)
     duration_ms = int((time.perf_counter() - start) * 1000)

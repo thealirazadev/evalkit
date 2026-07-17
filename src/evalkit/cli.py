@@ -73,6 +73,7 @@ def _resolve_config(
     no_cache: bool,
     no_color: bool,
     cwd: Path,
+    concurrency: int | None = None,
 ) -> Config:
     load_dotenv()
     configure_logging()
@@ -82,6 +83,7 @@ def _resolve_config(
         cli_judge_model=judge_model,
         cli_no_cache=no_cache,
         cli_no_color=no_color,
+        cli_concurrency=concurrency,
         env=os.environ,
         cwd=cwd,
     )
@@ -119,13 +121,14 @@ def _run_impl(
     judge_model: str | None,
     no_cache: bool,
     no_color: bool,
+    concurrency: int | None,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
     baseline_path: str,
 ) -> int:
     cwd = Path.cwd()
-    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd)
+    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd, concurrency)
     loaded = _load_suites(config, suites, cwd)
     _require_provider(config)
     result, console = _execute(config, loaded, cwd)
@@ -159,10 +162,11 @@ def _baseline_impl(
     judge_model: str | None,
     no_cache: bool,
     no_color: bool,
+    concurrency: int | None,
     baseline_path: str,
 ) -> int:
     cwd = Path.cwd()
-    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd)
+    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd, concurrency)
     loaded = _load_suites(config, suites, cwd)
     _require_provider(config)
     result, console = _execute(config, loaded, cwd)
@@ -191,6 +195,7 @@ def cli() -> None:
 @click.option("--judge-model", "judge_model", default=None, help="Override the judge model.")
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
+@click.option("--concurrency", type=int, default=None, help="Worker pool size (default 4).")
 @click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
 @click.option("--junit", "junit_path", type=click.Path(), default=None, help="Write JUnit XML.")
 @click.option(
@@ -213,6 +218,7 @@ def run(
     judge_model: str | None,
     no_cache: bool,
     no_color: bool,
+    concurrency: int | None,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
@@ -227,6 +233,7 @@ def run(
             judge_model,
             no_cache,
             no_color,
+            concurrency,
             json_path,
             junit_path,
             fail_on_cost,
@@ -243,6 +250,7 @@ def run(
 @click.option("--judge-model", "judge_model", default=None, help="Override the judge model.")
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
+@click.option("--concurrency", type=int, default=None, help="Worker pool size (default 4).")
 @click.option(
     "--baseline",
     "baseline_path",
@@ -257,12 +265,13 @@ def baseline(
     judge_model: str | None,
     no_cache: bool,
     no_color: bool,
+    concurrency: int | None,
     baseline_path: str,
 ) -> None:
     """Store a passing run as the baseline snapshot; refuse if any case fails."""
     code = _boundary(
         lambda: _baseline_impl(
-            suites, config_path, model, judge_model, no_cache, no_color, baseline_path
+            suites, config_path, model, judge_model, no_cache, no_color, concurrency, baseline_path
         )
     )
     raise SystemExit(code)

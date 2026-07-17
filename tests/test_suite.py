@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from evalkit.errors import SuiteError
-from evalkit.suite import discover_suites, load_suite
+from evalkit.suite import discover_suites, load_suite, referenced_variables, render_template
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -154,3 +154,48 @@ def test_discovery_missing_path(tmp_path):
     with pytest.raises(SuiteError) as exc:
         discover_suites(["nope.yaml"], "x", cwd=tmp_path)
     assert "Suite path not found" in exc.value.message
+
+
+def test_render_basic_and_spaced():
+    out = render_template(
+        "Hi {{name}} and {{ other }}", {"name": "A", "other": "B"}, file="f", case_name="c"
+    )
+    assert out == "Hi A and B"
+
+
+def test_render_numbers_and_bools():
+    out = render_template("{{n}}/{{flag}}", {"n": 3, "flag": True}, file="f", case_name="c")
+    assert out == "3/True"
+
+
+def test_render_leaves_non_variables_verbatim():
+    template = "{{a.b}} {single} {{123}} {{ok}}"
+    out = render_template(template, {"ok": "X"}, file="f", case_name="c")
+    assert out == "{{a.b}} {single} {{123}} X"
+
+
+def test_render_undefined_variable_raises():
+    with pytest.raises(SuiteError) as exc:
+        render_template("Hi {{missing}}", {}, file="evals/x.yaml", case_name="c")
+    assert exc.value.message == "Suite evals/x.yaml, case c: undefined variable {{missing}}"
+
+
+def test_load_suite_catches_undefined_variable(tmp_path):
+    text = """
+suite: demo
+prompt: "Hello {{typo}}"
+cases:
+  - name: a
+    vars:
+      name: World
+    assert: [{type: json_valid}]
+"""
+    path = tmp_path / "s.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(SuiteError) as exc:
+        load_suite(path, cwd=tmp_path)
+    assert "undefined variable {{typo}}" in exc.value.message
+
+
+def test_referenced_variables():
+    assert referenced_variables("{{a}} and {{ b }} and {{a}}") == {"a", "b"}

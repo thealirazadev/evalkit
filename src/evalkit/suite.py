@@ -258,7 +258,7 @@ def load_suite(path: Path, cwd: Path | None = None) -> Suite:
     seen: set[str] = set()
     cases = tuple(_parse_case(c, file, seen) for c in cases_raw)
 
-    return Suite(
+    suite = Suite(
         name=name,
         file=file,
         description=description,
@@ -268,3 +268,42 @@ def load_suite(path: Path, cwd: Path | None = None) -> Suite:
         prompt_template=prompt,
         cases=cases,
     )
+
+    # Render every case now so an undefined {{variable}} fails validation before any call.
+    for case in cases:
+        render_case(suite, case)
+    return suite
+
+
+def referenced_variables(template: str) -> set[str]:
+    """Return the set of {{variable}} names referenced in a template."""
+    return set(VARIABLE_RE.findall(template))
+
+
+def render_template(
+    template: str, variables: Mapping[str, Any], *, file: str, case_name: str
+) -> str:
+    """Substitute {{name}} tokens from ``variables``; unknown names are a load-time error.
+
+    Only ``{{name}}`` (optionally spaced) with an identifier-like name is a variable;
+    anything else is left verbatim. Values render with ``str()``.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in variables:
+            raise SuiteError(f"Suite {file}, case {case_name}: undefined variable {{{{{name}}}}}")
+        return str(variables[name])
+
+    return VARIABLE_RE.sub(replace, template)
+
+
+def render_case(suite: Suite, case: Case) -> tuple[str | None, str]:
+    """Render (system, prompt) for a case, raising on any undefined variable."""
+    system = (
+        render_template(suite.system_template, case.vars, file=suite.file, case_name=case.name)
+        if suite.system_template is not None
+        else None
+    )
+    prompt = render_template(suite.prompt_template, case.vars, file=suite.file, case_name=case.name)
+    return system, prompt

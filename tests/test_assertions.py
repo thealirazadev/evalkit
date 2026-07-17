@@ -33,3 +33,18 @@ def test_not_contains_fail_message():
     passed, message = evaluate_assertion(Assertion(type="not_contains", value="error"), "an error")
     assert passed is False
     assert message == 'not_contains: "error" found in response'
+
+
+def test_equals_pass_strips_whitespace():
+    assert evaluate_assertion(Assertion(type="equals", value="yes"), "  yes\n") == (True, None)
+
+
+def test_equals_fail_message():
+    passed, message = evaluate_assertion(Assertion(type="equals", value="yes"), "no")
+    assert passed is False
+    assert message == 'equals: response does not equal "yes"'
+
+
+def test_equals_on_empty_response():
+    passed, _ = evaluate_assertion(Assertion(type="equals", value="yes"), "   ")
+    assert passed is False

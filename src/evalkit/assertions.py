@@ -42,6 +42,14 @@ def _not_contains(assertion: Assertion, response: str) -> AssertionResult:
     return False, f'not_contains: "{value}" found in response'
 
 
+@_register("equals")
+def _equals(assertion: Assertion, response: str) -> AssertionResult:
+    value = str(assertion.value)
+    if response.strip() == value:
+        return True, None
+    return False, f'equals: response does not equal "{value}"'
+
+
 def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
     """Evaluate one deterministic assertion against the response text."""
     handler = _HANDLERS.get(assertion.type)

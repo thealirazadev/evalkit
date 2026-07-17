@@ -20,3 +20,16 @@ def test_contains_fail_message():
 def test_contains_case_sensitive():
     passed, _ = evaluate_assertion(Assertion(type="contains", value="Refund"), "refund")
     assert passed is False
+
+
+def test_not_contains_pass():
+    assert evaluate_assertion(Assertion(type="not_contains", value="error"), "all good") == (
+        True,
+        None,
+    )
+
+
+def test_not_contains_fail_message():
+    passed, message = evaluate_assertion(Assertion(type="not_contains", value="error"), "an error")
+    assert passed is False
+    assert message == 'not_contains: "error" found in response'

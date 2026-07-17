@@ -83,3 +83,29 @@ def test_json_valid_fail_message():
 def test_json_valid_empty_response_fails():
     passed, _ = evaluate_assertion(Assertion(type="json_valid"), "   ")
     assert passed is False
+
+
+SCHEMA = {
+    "type": "object",
+    "properties": {"reply": {"type": "string"}, "escalate": {"type": "boolean"}},
+    "required": ["reply", "escalate"],
+}
+
+
+def test_json_schema_pass():
+    resp = '{"reply": "hi", "escalate": false}'
+    assert evaluate_assertion(Assertion(type="json_schema", schema=SCHEMA), resp) == (True, None)
+
+
+def test_json_schema_not_json():
+    passed, message = evaluate_assertion(Assertion(type="json_schema", schema=SCHEMA), "nope")
+    assert passed is False
+    assert message == "json_schema: response is not valid JSON"
+
+
+def test_json_schema_validation_failure():
+    resp = '{"reply": "hi"}'  # missing required "escalate"
+    passed, message = evaluate_assertion(Assertion(type="json_schema", schema=SCHEMA), resp)
+    assert passed is False
+    assert message.startswith("json_schema: ")
+    assert "escalate" in message

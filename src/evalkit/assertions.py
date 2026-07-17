@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+import jsonschema
+
 from evalkit.suite import Assertion
 
 AssertionResult = tuple[bool, str | None]
@@ -67,6 +69,19 @@ def _json_valid(assertion: Assertion, response: str) -> AssertionResult:
     except (ValueError, TypeError):
         return False, "json_valid: response is not valid JSON"
     return True, None
+
+
+@_register("json_schema")
+def _json_schema(assertion: Assertion, response: str) -> AssertionResult:
+    try:
+        instance = json.loads(response)
+    except (ValueError, TypeError):
+        return False, "json_schema: response is not valid JSON"
+    validator = jsonschema.Draft202012Validator(assertion.schema)
+    error = next(iter(validator.iter_errors(instance)), None)
+    if error is None:
+        return True, None
+    return False, f"json_schema: {error.message}"
 
 
 def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:

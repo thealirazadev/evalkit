@@ -8,11 +8,18 @@ set once as a Bearer header on the client and is never logged.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
 
+from evalkit.errors import ProviderError
+
 CHAT_PATH = "/chat/completions"
+DEFAULT_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY = 0.5
+AUTH_STATUS = frozenset({401, 403})
+AUTH_MESSAGE = "API key missing or invalid. Set EVALKIT_API_KEY."
 
 
 class ProviderCallError(Exception):
@@ -77,17 +84,64 @@ def _parse_success(resp: httpx.Response, latency_ms: int) -> ProviderResponse:
     )
 
 
+def _retry_after(resp: httpx.Response) -> float | None:
+    raw = resp.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
+
+
+def _backoff(attempt: int, retry_after: float | None) -> float:
+    """Delay before the next attempt: honor Retry-After, else exponential backoff."""
+    if retry_after is not None:
+        return retry_after
+    return RETRY_BASE_DELAY * (2 ** (attempt - 1))
+
+
 def complete_chat(
     client: httpx.Client,
     model: str,
     messages: list[dict[str, str]],
     params: dict[str, object],
+    *,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> ProviderResponse:
-    """Send one chat-completions request and return the parsed response."""
+    """Send one chat-completions request, retrying transient failures.
+
+    401/403 raise ``ProviderError`` and abort the whole run. 429, 5xx, timeouts, and
+    connection errors retry up to ``max_attempts`` with exponential backoff (honoring
+    ``Retry-After``); if still failing, a ``ProviderCallError`` marks just this case.
+    """
     body = {"model": model, "messages": messages, **params}
-    start = time.perf_counter()
-    resp = client.post(CHAT_PATH, json=body)
-    latency_ms = int((time.perf_counter() - start) * 1000)
-    if resp.status_code != 200:
-        raise ProviderCallError(str(resp.status_code))
-    return _parse_success(resp, latency_ms)
+    reason = "unknown provider error"
+    for attempt in range(1, max_attempts + 1):
+        retry_after: float | None = None
+        start = time.perf_counter()
+        try:
+            resp = client.post(CHAT_PATH, json=body)
+        except httpx.TimeoutException:
+            reason = "request timed out"
+        except httpx.RequestError as exc:
+            reason = f"connection error ({type(exc).__name__})"
+        else:
+            status = resp.status_code
+            if status in AUTH_STATUS:
+                raise ProviderError(AUTH_MESSAGE)
+            if status == 200:
+                latency_ms = int((time.perf_counter() - start) * 1000)
+                return _parse_success(resp, latency_ms)
+            if status == 429 or status >= 500:
+                reason = str(status)
+                retry_after = _retry_after(resp)
+            else:
+                # Non-retryable client error (e.g. 400): fail this case immediately.
+                raise ProviderCallError(str(status))
+
+        if attempt < max_attempts:
+            sleep(_backoff(attempt, retry_after))
+
+    raise ProviderCallError(f"{reason} after {max_attempts} attempts")

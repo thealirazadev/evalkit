@@ -2,8 +2,11 @@
 
 import json
 
+import httpx
+import pytest
 from conftest import chat_response
 
+from evalkit.errors import ProviderError
 from evalkit.provider import ProviderCallError, build_client, complete_chat
 
 
@@ -56,11 +59,64 @@ def test_empty_content_is_valid(transport_factory):
 
 
 def test_malformed_body_is_call_error(transport_factory):
-    import httpx
-
     client, _ = _client(transport_factory, lambda req, n: httpx.Response(200, json={"nope": 1}))
-    try:
+    with pytest.raises(ProviderCallError) as exc:
         complete_chat(client, "m", [{"role": "user", "content": "hi"}], {})
-        raise AssertionError("expected ProviderCallError")
-    except ProviderCallError as exc:
-        assert "malformed" in exc.reason
+    assert "malformed" in exc.value.reason
+
+
+def test_auth_failure_aborts(transport_factory):
+    client, rec = _client(transport_factory, lambda req, n: httpx.Response(401))
+    with pytest.raises(ProviderError) as exc:
+        complete_chat(client, "m", [{"role": "user", "content": "hi"}], {})
+    assert exc.value.message == "API key missing or invalid. Set EVALKIT_API_KEY."
+    assert exc.value.exit_code == 2
+    assert rec.call_count == 1  # no retries on auth failure
+
+
+def test_retry_then_success(transport_factory):
+    def handler(req, n):
+        return httpx.Response(503) if n < 3 else chat_response("recovered")
+
+    client, rec = _client(transport_factory, handler)
+    resp = complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=lambda s: None)
+    assert resp.text == "recovered"
+    assert rec.call_count == 3
+
+
+def test_retry_exhausted_is_call_error(transport_factory):
+    client, rec = _client(transport_factory, lambda req, n: httpx.Response(503))
+    with pytest.raises(ProviderCallError) as exc:
+        complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=lambda s: None)
+    assert "503 after 3 attempts" in exc.value.reason
+    assert rec.call_count == 3
+
+
+def test_timeout_retries(transport_factory):
+    def handler(req, n):
+        raise httpx.ConnectTimeout("slow")
+
+    client, rec = _client(transport_factory, handler)
+    with pytest.raises(ProviderCallError) as exc:
+        complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=lambda s: None)
+    assert "timed out" in exc.value.reason
+    assert rec.call_count == 3
+
+
+def test_retry_after_header_honored(transport_factory):
+    delays = []
+
+    def handler(req, n):
+        return httpx.Response(429, headers={"Retry-After": "7"}) if n < 2 else chat_response("ok")
+
+    client, rec = _client(transport_factory, handler)
+    complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=delays.append)
+    assert delays == [7.0]
+
+
+def test_non_retryable_client_error(transport_factory):
+    client, rec = _client(transport_factory, lambda req, n: httpx.Response(400))
+    with pytest.raises(ProviderCallError) as exc:
+        complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=lambda s: None)
+    assert exc.value.reason == "400"
+    assert rec.call_count == 1  # 400 is not retried

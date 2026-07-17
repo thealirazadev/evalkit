@@ -210,6 +210,15 @@ def _aggregate(suite_results: list[SuiteResult], config: Config) -> RunTotals:
     )
 
 
+def exit_code(run: RunResult) -> int:
+    """Map run outcomes to an exit code. Precedence: 2 (errors) beats 1 (failures) beats 0."""
+    if run.totals.errors:
+        return 2
+    if run.totals.failed:
+        return 1
+    return 0
+
+
 def run_suites(
     suites: list[Suite], config: Config, client: httpx.Client, cache_root: Path
 ) -> RunResult:

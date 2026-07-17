@@ -4,7 +4,7 @@ from conftest import chat_response
 
 from evalkit.config import Config
 from evalkit.provider import build_client
-from evalkit.runner import run_suites
+from evalkit.runner import exit_code, run_suites
 from evalkit.suite import load_suite
 
 PRICING = {"example-model-1": {"input": 3.00, "output": 15.00}}
@@ -141,3 +141,36 @@ def test_cost_computed_and_partial_flag(tmp_path, transport_factory):
     result2 = run_suites([suite], make_config(pricing={}), client, tmp_path / "cache2")
     assert result2.totals.cost_known is False
     assert "no pricing for example-model-1" in result2.totals.partial_reason
+
+
+def test_exit_code_precedence(tmp_path, transport_factory):
+    import httpx
+
+    # First case (calls 1-3, all retries) errors; second case fails contains -> error wins.
+    def handler(req, n):
+        return httpx.Response(503) if n <= 3 else chat_response('{"reply": "ok"}')
+
+    client, _ = _client(transport_factory, handler)
+    result = run_suites([_suite(tmp_path)], make_config(), client, tmp_path / "cache")
+    assert result.totals.errors >= 1
+    assert exit_code(result) == 2
+
+
+def test_exit_code_failure_and_pass(tmp_path, transport_factory):
+    client, _ = _client(transport_factory, lambda req, n: chat_response('{"reply": "ok"}'))
+    result = run_suites([_suite(tmp_path)], make_config(), client, tmp_path / "cache")
+    assert result.totals.failed == 1 and result.totals.errors == 0
+    assert exit_code(result) == 1
+
+    passing = """
+suite: demo
+model: example-model-1
+prompt: hi
+cases:
+  - name: ok
+    assert: [{type: contains, value: reply}]
+"""
+    result2 = run_suites(
+        [_suite(tmp_path, passing, "p.yaml")], make_config(), client, tmp_path / "c2"
+    )
+    assert exit_code(result2) == 0

@@ -7,6 +7,7 @@ set once as a Bearer header on the client and is never logged.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 import httpx
 
 from evalkit.errors import ProviderError
+
+logger = logging.getLogger("evalkit")
 
 CHAT_PATH = "/chat/completions"
 DEFAULT_MAX_ATTEMPTS = 3
@@ -129,6 +132,8 @@ def complete_chat(
             reason = f"connection error ({type(exc).__name__})"
         else:
             status = resp.status_code
+            # Only the status and attempt are logged, never the Authorization header.
+            logger.debug("event=request status_code=%d attempt=%d", status, attempt)
             if status in AUTH_STATUS:
                 raise ProviderError(AUTH_MESSAGE)
             if status == 200:

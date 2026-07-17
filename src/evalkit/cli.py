@@ -75,9 +75,11 @@ def _resolve_config(
     no_color: bool,
     cwd: Path,
     concurrency: int | None = None,
+    quiet: bool = False,
+    verbose: bool = False,
 ) -> Config:
     load_dotenv()
-    configure_logging()
+    configure_logging(quiet=quiet, verbose=verbose)
     return load_config(
         config_path=config_path,
         cli_model=model,
@@ -116,9 +118,11 @@ def _require_provider(config: Config) -> None:
         )
 
 
-def _execute(config: Config, loaded: list[Suite], cwd: Path) -> tuple[RunResult, Console]:
+def _execute(
+    config: Config, loaded: list[Suite], cwd: Path, *, quiet: bool = False
+) -> tuple[RunResult, Console]:
     console = Console(no_color=config.no_color)
-    print_liveness(console, sum(len(s.cases) for s in loaded))
+    print_liveness(console, sum(len(s.cases) for s in loaded), quiet=quiet)
     client = build_client(config.base_url, config.api_key, config.timeout_seconds)
     try:
         result = run_suites(loaded, config, client, cwd / CACHE_SUBDIR)
@@ -136,22 +140,27 @@ def _run_impl(
     no_color: bool,
     concurrency: int | None,
     pattern: str | None,
+    quiet: bool,
+    verbose: bool,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
     baseline_path: str,
 ) -> int:
+    quiet = quiet and not verbose  # more information wins
     cwd = Path.cwd()
-    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd, concurrency)
+    config = _resolve_config(
+        config_path, model, judge_model, no_cache, no_color, cwd, concurrency, quiet, verbose
+    )
     loaded = _load_suites(config, suites, cwd)
     if pattern:
         loaded = _filter_suites(loaded, pattern)
     _require_provider(config)
-    result, console = _execute(config, loaded, cwd)
+    result, console = _execute(config, loaded, cwd, quiet=quiet)
 
     baseline = load_baseline(baseline_path)
     diff = diff_against_baseline(baseline, result, baseline_path) if baseline else None
-    render_report(console, result, baseline=baseline, diff=diff)
+    render_report(console, result, baseline=baseline, diff=diff, quiet=quiet)
     if json_path:
         write_json_report(result, config, json_path, diff)
     if junit_path:
@@ -179,14 +188,19 @@ def _baseline_impl(
     no_cache: bool,
     no_color: bool,
     concurrency: int | None,
+    quiet: bool,
+    verbose: bool,
     baseline_path: str,
 ) -> int:
+    quiet = quiet and not verbose
     cwd = Path.cwd()
-    config = _resolve_config(config_path, model, judge_model, no_cache, no_color, cwd, concurrency)
+    config = _resolve_config(
+        config_path, model, judge_model, no_cache, no_color, cwd, concurrency, quiet, verbose
+    )
     loaded = _load_suites(config, suites, cwd)
     _require_provider(config)
-    result, console = _execute(config, loaded, cwd)
-    render_report(console, result)
+    result, console = _execute(config, loaded, cwd, quiet=quiet)
+    render_report(console, result, quiet=quiet)
 
     code = exit_code(result)
     if code != 0:
@@ -221,6 +235,8 @@ def cli() -> None:
     default=None,
     help="Exit 1 if total run cost (USD, incl. judge) exceeds this budget.",
 )
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Failures and summary only.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Debug logs on stderr.")
 @click.option(
     "--baseline",
     "baseline_path",
@@ -237,6 +253,8 @@ def run(
     no_color: bool,
     concurrency: int | None,
     pattern: str | None,
+    quiet: bool,
+    verbose: bool,
     json_path: str | None,
     junit_path: str | None,
     fail_on_cost: float | None,
@@ -253,6 +271,8 @@ def run(
             no_color,
             concurrency,
             pattern,
+            quiet,
+            verbose,
             json_path,
             junit_path,
             fail_on_cost,
@@ -270,6 +290,8 @@ def run(
 @click.option("--no-cache", is_flag=True, default=False, help="Skip cache reads (still writes).")
 @click.option("--no-color", is_flag=True, default=False, help="Disable ANSI color output.")
 @click.option("--concurrency", type=int, default=None, help="Worker pool size (default 4).")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Failures and summary only.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Debug logs on stderr.")
 @click.option(
     "--baseline",
     "baseline_path",
@@ -285,12 +307,23 @@ def baseline(
     no_cache: bool,
     no_color: bool,
     concurrency: int | None,
+    quiet: bool,
+    verbose: bool,
     baseline_path: str,
 ) -> None:
     """Store a passing run as the baseline snapshot; refuse if any case fails."""
     code = _boundary(
         lambda: _baseline_impl(
-            suites, config_path, model, judge_model, no_cache, no_color, concurrency, baseline_path
+            suites,
+            config_path,
+            model,
+            judge_model,
+            no_cache,
+            no_color,
+            concurrency,
+            quiet,
+            verbose,
+            baseline_path,
         )
     )
     raise SystemExit(code)

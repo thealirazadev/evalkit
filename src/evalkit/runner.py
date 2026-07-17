@@ -8,6 +8,7 @@ latency is the mean of fresh (non-cached) samples. Concurrency arrives in a late
 
 from __future__ import annotations
 
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -23,6 +24,8 @@ from evalkit.cost import case_cost, has_pricing
 from evalkit.judge import JUDGE_PARAMS, JudgeError, build_judge_messages, parse_verdict
 from evalkit.provider import ProviderCallError, complete_chat
 from evalkit.suite import Assertion, Case, Suite, render_case
+
+logger = logging.getLogger("evalkit")
 
 
 @dataclass
@@ -318,6 +321,19 @@ def _run_sample(
         )
 
     ev = _evaluate(case, text, config, client, cache_root, sample)
+    cost = case_cost(config.pricing, model, prompt_tokens, completion_tokens)
+    logger.debug(
+        "event=sample suite=%s case=%s sample=%d cache=%s latency_ms=%d "
+        "prompt_tokens=%s completion_tokens=%s cost_usd=%s",
+        suite.name,
+        case.name,
+        sample + 1,
+        "hit" if cached else "miss",
+        latency_ms,
+        prompt_tokens,
+        completion_tokens,
+        cost,
+    )
     return _Sample(
         passed=ev.error is None and not ev.failures,
         failures=ev.failures,
@@ -325,7 +341,7 @@ def _run_sample(
         latency_ms=latency_ms,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        cost_usd=case_cost(config.pricing, model, prompt_tokens, completion_tokens),
+        cost_usd=cost,
         judge_cost=ev.judge_cost,
         judge_cost_known=ev.judge_cost_known,
         judge_model=ev.judge_model,

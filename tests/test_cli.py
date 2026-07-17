@@ -223,6 +223,32 @@ def test_off_tty_liveness_and_plain_output(project):
     assert "\x1b" not in result.output  # no escape codes when piped
 
 
+def test_quiet_shows_only_failures_and_summary(project):
+    project.write_suite(TWO_CASE_SUITE)  # both cases pass
+    result = project(["run", "--quiet"])
+    assert result.exit_code == 0
+    assert "refund-flow" not in result.output  # passing case line suppressed
+    assert "running 2 cases..." not in result.output  # no liveness under quiet
+    assert "summary" in result.output  # summary always prints
+
+
+def test_verbose_emits_structured_logs_without_key(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--verbose"])
+    assert result.exit_code == 0
+    assert "event=sample" in result.output
+    assert "cache=miss" in result.output
+    assert "secret-key" not in result.output  # the key is never logged
+
+
+def test_quiet_and_verbose_resolve_to_verbose(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--quiet", "--verbose"])
+    assert result.exit_code == 0
+    assert "event=sample" in result.output  # verbose wins
+    assert "pass  ok" in result.output  # not quiet
+
+
 def test_baseline_store_then_diff_shows_regression(project):
     project.write_suite(PASSING_SUITE)
     stored = project(["baseline"])

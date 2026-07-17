@@ -1,8 +1,9 @@
 """Per-case execution, result assembly, and run aggregation.
 
-Phase 1 runs one sample per case, serially. Each case renders its prompt, obtains a
-response (cache or provider), evaluates the deterministic assertions, and records cost
-and latency. N-sample looping, the judge, and concurrency arrive in later phases.
+Each case runs over its ``samples`` (default 1), serially. A sample renders the prompt,
+obtains a response (cache or provider), and evaluates its assertions (deterministic plus
+judge). The case passes when ``passed / samples >= threshold``; cost sums over samples and
+latency is the mean of fresh (non-cached) samples. Concurrency arrives in a later phase.
 """
 
 from __future__ import annotations
@@ -187,20 +188,21 @@ class _Eval:
 
 
 def _evaluate(
-    case: Case, text: str, config: Config, client: httpx.Client, cache_root: Path
+    case: Case, text: str, config: Config, client: httpx.Client, cache_root: Path, sample: int
 ) -> _Eval:
-    """Evaluate all assertions. A non-None ``error`` means the case is an error."""
+    """Evaluate all assertions for one sample. A non-None ``error`` means the case is an error."""
     failures: list[Failure] = []
     judge_cost = 0.0
     judge_cost_known = True
     judge_model: str | None = None
     judge_cached = True
+    label = sample + 1
     for assertion in case.assertions:
         if assertion.type == "judge":
             judge_model = config.judge_model or config.default_model or ""
             try:
                 verdict, cost, cached = _judge_call(
-                    assertion, text, judge_model, config, client, cache_root, 0
+                    assertion, text, judge_model, config, client, cache_root, sample
                 )
             except JudgeError:
                 return _Eval(
@@ -226,23 +228,63 @@ def _evaluate(
             else:
                 judge_cost += cost
             if not verdict.passed:
-                failures.append(Failure("judge", f"judge: {verdict.reason}", sample=1))
+                failures.append(Failure("judge", f"judge: {verdict.reason}", sample=label))
         else:
             passed, message = evaluate_assertion(assertion, text)
             if not passed:
-                failures.append(Failure(assertion.type, message, sample=1))
+                failures.append(Failure(assertion.type, message, sample=label))
     return _Eval(failures, judge_cost, judge_cost_known, judge_model, judge_cached, None)
 
 
-def run_case(
-    suite: Suite, case: Case, config: Config, client: httpx.Client, cache_root: Path
-) -> CaseResult:
-    """Execute one case (single sample) and return its result."""
-    model = config.model_for(suite.model) or ""
-    system, prompt = render_case(suite, case)
-    params = _merged_params(suite.params)
-    key = cache_key(model, system, prompt, params, 0)
+@dataclass
+class _Sample:
+    """The outcome of one sample of a case."""
 
+    passed: bool
+    failures: list[Failure]
+    cached: bool
+    latency_ms: int
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    cost_usd: float | None
+    judge_cost: float
+    judge_cost_known: bool
+    judge_model: str | None
+    error: str | None
+
+
+def _mean(values: list[int]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _meets_threshold(passed: int, samples: int, threshold: float) -> bool:
+    """True when the passing fraction meets the threshold.
+
+    Thresholds are written to about two decimals (e.g. 0.67 for two-of-three), so the
+    fraction is compared at that precision; otherwise 2/3 = 0.6667 would miss 0.67.
+    """
+    return round(passed / samples, 2) >= round(threshold, 2)
+
+
+def _sum_tokens(values: object) -> int | None:
+    counts = [v for v in values if v is not None]
+    return sum(counts) if counts else None
+
+
+def _run_sample(
+    suite: Suite,
+    case: Case,
+    config: Config,
+    client: httpx.Client,
+    cache_root: Path,
+    model: str,
+    system: str | None,
+    prompt: str,
+    params: dict,
+    sample: int,
+) -> _Sample:
+    """Run one sample: obtain the response (cache or provider) and evaluate its assertions."""
+    key = cache_key(model, system, prompt, params, sample)
     entry = read_cache(cache_root, key) if config.cache else None
     if entry is not None:
         text = entry.response_text
@@ -256,9 +298,11 @@ def run_case(
         try:
             resp = complete_chat(client, model, _build_messages(system, prompt), params)
         except ProviderCallError as exc:
-            return _error_case(suite, case, model, f"provider: {exc.reason}", 0.0)
-        text = resp.text
-        prompt_tokens, completion_tokens, latency_ms = (
+            return _Sample(
+                False, [], False, 0, None, None, None, 0.0, True, None, f"provider: {exc.reason}"
+            )
+        text, prompt_tokens, completion_tokens, latency_ms = (
+            resp.text,
             resp.prompt_tokens,
             resp.completion_tokens,
             resp.latency_ms,
@@ -270,29 +314,69 @@ def run_case(
             CacheEntry(text, prompt_tokens, completion_tokens, latency_ms, _now_iso(), model),
         )
 
-    ev = _evaluate(case, text, config, client, cache_root)
-    if ev.error is not None:
-        return _error_case(suite, case, model, ev.error, ev.judge_cost)
+    ev = _evaluate(case, text, config, client, cache_root, sample)
+    return _Sample(
+        passed=ev.error is None and not ev.failures,
+        failures=ev.failures,
+        cached=cached and ev.judge_cached,
+        latency_ms=latency_ms,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=case_cost(config.pricing, model, prompt_tokens, completion_tokens),
+        judge_cost=ev.judge_cost,
+        judge_cost_known=ev.judge_cost_known,
+        judge_model=ev.judge_model,
+        error=ev.error,
+    )
 
-    status = "pass" if not ev.failures else "fail"
+
+def run_case(
+    suite: Suite, case: Case, config: Config, client: httpx.Client, cache_root: Path
+) -> CaseResult:
+    """Execute a case over its ``samples`` and combine them against the pass threshold."""
+    model = config.model_for(suite.model) or ""
+    system, prompt = render_case(suite, case)
+    params = _merged_params(suite.params)
+
+    samples = [
+        _run_sample(suite, case, config, client, cache_root, model, system, prompt, params, s)
+        for s in range(case.samples)
+    ]
+
+    error = next((s.error for s in samples if s.error is not None), None)
+    judge_cost = sum(s.judge_cost for s in samples)
+    if error is not None:
+        return _error_case(suite, case, model, error, judge_cost)
+
+    passed = sum(s.passed for s in samples)
+    status = "pass" if _meets_threshold(passed, case.samples, case.threshold) else "fail"
+    failures = [] if status == "pass" else [f for s in samples for f in s.failures]
+
+    fresh_latencies = [s.latency_ms for s in samples if not s.cached]
+    all_latencies = [s.latency_ms for s in samples]
+    latency_ms = int(_mean(fresh_latencies if fresh_latencies else all_latencies))
+
+    sample_costs = [s.cost_usd for s in samples]
+    cost_usd = sum(sample_costs) if all(c is not None for c in sample_costs) else None
+
     return CaseResult(
         suite=suite.name,
         name=case.name,
         key=f"{suite.name}/{case.name}",
         model=model,
         status=status,
-        samples=1,
-        samples_passed=1 if status == "pass" else 0,
+        samples=case.samples,
+        samples_passed=passed,
         threshold=case.threshold,
         latency_ms=latency_ms,
-        cached=cached and ev.judge_cached,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        cost_usd=case_cost(config.pricing, model, prompt_tokens, completion_tokens),
-        judge_cost_usd=ev.judge_cost,
-        judge_model=ev.judge_model,
-        judge_cost_known=ev.judge_cost_known,
-        failures=ev.failures,
+        cached=all(s.cached for s in samples),
+        prompt_tokens=_sum_tokens(s.prompt_tokens for s in samples),
+        completion_tokens=_sum_tokens(s.completion_tokens for s in samples),
+        cost_usd=cost_usd,
+        judge_cost_usd=judge_cost,
+        judge_model=next((s.judge_model for s in samples if s.judge_model), None),
+        judge_cost_known=all(s.judge_cost_known for s in samples),
+        failures=failures,
     )
 
 

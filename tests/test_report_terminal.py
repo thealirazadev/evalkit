@@ -109,6 +109,14 @@ def test_partial_cost_warning_and_summary():
     assert "n/a" in out  # the case line shows n/a cost
 
 
+def test_sample_ratio_shown_when_samples_gt_one():
+    passing = _case("p", "pass", samples=3, samples_passed=3)
+    failing = _case("f", "fail", samples=3, samples_passed=1, threshold=0.67)
+    out = _render(_run([passing, failing], _totals()))
+    assert "3/3" in out
+    assert "1/3 < 0.67" in out
+
+
 def test_quiet_hides_passing_cases_but_keeps_summary():
     cases = [_case("good", "pass"), _case("bad", "fail", failures=[Failure("contains", "x")])]
     out = _render(_run(cases, _totals()), quiet=True)

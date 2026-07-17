@@ -199,3 +199,37 @@ cases:
 
 def test_referenced_variables():
     assert referenced_variables("{{a}} and {{ b }} and {{a}}") == {"a", "b"}
+
+
+def _suite_with(field_line, tmp_path):
+    text = f"""
+suite: demo
+prompt: hi
+cases:
+  - name: c
+    {field_line}
+    assert: [{{type: json_valid}}]
+"""
+    path = tmp_path / "s.yaml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_samples_must_be_positive_int(tmp_path):
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_suite_with("samples: 0", tmp_path), cwd=tmp_path)
+    assert "'samples' must be an integer >= 1" in exc.value.message
+
+
+def test_threshold_must_be_in_range(tmp_path):
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_suite_with("threshold: 1.5", tmp_path), cwd=tmp_path)
+    assert "'threshold' must be in (0, 1]" in exc.value.message
+    with pytest.raises(SuiteError):
+        load_suite(_suite_with("threshold: 0", tmp_path), cwd=tmp_path)
+
+
+def test_valid_samples_and_threshold_load(tmp_path):
+    suite = load_suite(_suite_with("samples: 3\n    threshold: 0.67", tmp_path), cwd=tmp_path)
+    assert suite.cases[0].samples == 3
+    assert suite.cases[0].threshold == 0.67

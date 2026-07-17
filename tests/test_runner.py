@@ -143,6 +143,78 @@ def test_cost_computed_and_partial_flag(tmp_path, transport_factory):
     assert "no pricing for example-model-1" in result2.totals.partial_reason
 
 
+NSAMPLE_SUITE = """
+suite: demo
+model: example-model-1
+prompt: "generate {{topic}}"
+cases:
+  - name: c
+    vars: {topic: x}
+    samples: 3
+    threshold: 0.67
+    assert:
+      - type: contains
+        value: reply
+"""
+
+
+def test_nsample_threshold_pass(tmp_path, transport_factory):
+    # 2 of 3 samples pass, threshold 0.67 -> case passes with ratio 2/3.
+    def handler(req, n):
+        return chat_response('{"reply": "x"}') if n in (1, 2) else chat_response('{"no": 1}')
+
+    client, rec = _client(transport_factory, handler)
+    result = run_suites(
+        [_suite(tmp_path, NSAMPLE_SUITE)], make_config(), client, tmp_path / "cache"
+    )
+    case = result.suites[0].cases[0]
+    assert case.samples == 3
+    assert case.samples_passed == 2
+    assert case.status == "pass"
+    assert rec.call_count == 3  # one provider call per sample (distinct cache keys)
+
+
+def test_nsample_threshold_fail(tmp_path, transport_factory):
+    def handler(req, n):
+        return chat_response('{"reply": "x"}') if n == 1 else chat_response('{"no": 1}')
+
+    client, _ = _client(transport_factory, handler)
+    result = run_suites(
+        [_suite(tmp_path, NSAMPLE_SUITE)], make_config(), client, tmp_path / "cache"
+    )
+    case = result.suites[0].cases[0]
+    assert case.samples_passed == 1
+    assert case.status == "fail"
+
+
+def test_nsample_cost_sums_over_samples(tmp_path, transport_factory):
+    client, _ = _client(
+        transport_factory,
+        lambda req, n: chat_response('{"reply": "x"}', prompt_tokens=1000, completion_tokens=500),
+    )
+    result = run_suites(
+        [_suite(tmp_path, NSAMPLE_SUITE)], make_config(), client, tmp_path / "cache"
+    )
+    case = result.suites[0].cases[0]
+    # 0.0105 per sample x 3 samples.
+    assert round(case.cost_usd, 4) == round(0.0105 * 3, 4)
+
+
+def test_nsample_cached_replays_identically(tmp_path, transport_factory):
+    def handler(req, n):
+        return chat_response('{"reply": "x"}') if n in (1, 2) else chat_response('{"no": 1}')
+
+    client, rec = _client(transport_factory, handler)
+    cache_root = tmp_path / "cache"
+    first = run_suites([_suite(tmp_path, NSAMPLE_SUITE)], make_config(), client, cache_root)
+    calls = rec.call_count
+    second = run_suites([_suite(tmp_path, NSAMPLE_SUITE)], make_config(), client, cache_root)
+    assert rec.call_count == calls  # zero new calls
+    case = second.suites[0].cases[0]
+    assert case.samples_passed == first.suites[0].cases[0].samples_passed == 2
+    assert case.cached is True
+
+
 def test_exit_code_precedence(tmp_path, transport_factory):
     import httpx
 

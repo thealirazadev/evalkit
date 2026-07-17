@@ -211,11 +211,13 @@ def _parse_case(raw: Any, file: str, seen: set[str]) -> Case:
     assertions = tuple(_parse_assertion(a, file, name) for a in asserts_raw)
 
     samples = raw.get("samples", 1)
-    if not isinstance(samples, int) or isinstance(samples, bool):
-        raise SuiteError(f"Invalid suite {file}: {where}: 'samples' must be an integer")
+    if not isinstance(samples, int) or isinstance(samples, bool) or samples < 1:
+        raise SuiteError(f"Invalid suite {file}: {where}: 'samples' must be an integer >= 1")
     threshold = raw.get("threshold", 1.0)
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
         raise SuiteError(f"Invalid suite {file}: {where}: 'threshold' must be a number")
+    if not 0 < threshold <= 1:
+        raise SuiteError(f"Invalid suite {file}: {where}: 'threshold' must be in (0, 1]")
 
     return Case(
         name=name,

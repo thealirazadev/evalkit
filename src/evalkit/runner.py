@@ -18,8 +18,9 @@ from evalkit.assertions import evaluate_assertion
 from evalkit.cache import CacheEntry, cache_key, read_cache, write_cache
 from evalkit.config import DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, Config
 from evalkit.cost import case_cost, has_pricing
+from evalkit.judge import JUDGE_PARAMS, JudgeError, build_judge_messages, parse_verdict
 from evalkit.provider import ProviderCallError, complete_chat
-from evalkit.suite import Case, Suite, render_case
+from evalkit.suite import Assertion, Case, Suite, render_case
 
 
 @dataclass
@@ -49,6 +50,8 @@ class CaseResult:
     completion_tokens: int | None
     cost_usd: float | None
     judge_cost_usd: float
+    judge_model: str | None = None
+    judge_cost_known: bool = True
     failures: list[Failure] = field(default_factory=list)
     error: str | None = None
 
@@ -102,6 +105,87 @@ def _build_messages(system: str | None, prompt: str) -> list[dict[str, str]]:
     return messages
 
 
+def _error_case(suite: Suite, case: Case, model: str, reason: str, judge_cost: float) -> CaseResult:
+    return CaseResult(
+        suite=suite.name,
+        name=case.name,
+        key=f"{suite.name}/{case.name}",
+        model=model,
+        status="error",
+        samples=1,
+        samples_passed=0,
+        threshold=case.threshold,
+        latency_ms=0,
+        cached=False,
+        prompt_tokens=None,
+        completion_tokens=None,
+        cost_usd=None,
+        judge_cost_usd=judge_cost,
+        error=reason,
+    )
+
+
+def _judge_call(
+    assertion: Assertion,
+    response_text: str,
+    judge_model: str,
+    config: Config,
+    client: httpx.Client,
+    sample: int,
+) -> tuple[object, float | None]:
+    """Return (Verdict, cost). Retry once with a JSON-only nudge; then raise JudgeError."""
+    for attempt in range(2):
+        messages = build_judge_messages(assertion.rubric or "", response_text, retry=attempt == 1)
+        resp = complete_chat(client, judge_model, messages, JUDGE_PARAMS)
+        cost = case_cost(config.pricing, judge_model, resp.prompt_tokens, resp.completion_tokens)
+        verdict = parse_verdict(resp.text)
+        if verdict is not None:
+            return verdict, cost
+    raise JudgeError()
+
+
+def _evaluate(
+    case: Case,
+    text: str,
+    config: Config,
+    client: httpx.Client,
+) -> tuple[list[Failure], float, bool, str | None, str | None]:
+    """Evaluate all assertions, returning failures, judge cost, and judge accounting flags.
+
+    The last element is a judge error reason (not None => the case is an error).
+    """
+    failures: list[Failure] = []
+    judge_cost = 0.0
+    judge_cost_known = True
+    judge_model: str | None = None
+    for assertion in case.assertions:
+        if assertion.type == "judge":
+            judge_model = config.judge_model or config.default_model or ""
+            try:
+                verdict, cost = _judge_call(assertion, text, judge_model, config, client, 0)
+            except JudgeError:
+                return (
+                    failures,
+                    judge_cost,
+                    judge_cost_known,
+                    judge_model,
+                    ("judge: returned an unparseable verdict"),
+                )
+            except ProviderCallError as exc:
+                return failures, judge_cost, judge_cost_known, judge_model, f"judge: {exc.reason}"
+            if cost is None:
+                judge_cost_known = False
+            else:
+                judge_cost += cost
+            if not verdict.passed:
+                failures.append(Failure("judge", f"judge: {verdict.reason}", sample=1))
+        else:
+            passed, message = evaluate_assertion(assertion, text)
+            if not passed:
+                failures.append(Failure(assertion.type, message, sample=1))
+    return failures, judge_cost, judge_cost_known, judge_model, None
+
+
 def run_case(
     suite: Suite, case: Case, config: Config, client: httpx.Client, cache_root: Path
 ) -> CaseResult:
@@ -124,23 +208,7 @@ def run_case(
         try:
             resp = complete_chat(client, model, _build_messages(system, prompt), params)
         except ProviderCallError as exc:
-            return CaseResult(
-                suite=suite.name,
-                name=case.name,
-                key=f"{suite.name}/{case.name}",
-                model=model,
-                status="error",
-                samples=1,
-                samples_passed=0,
-                threshold=case.threshold,
-                latency_ms=0,
-                cached=False,
-                prompt_tokens=None,
-                completion_tokens=None,
-                cost_usd=None,
-                judge_cost_usd=0.0,
-                error=f"provider: {exc.reason}",
-            )
+            return _error_case(suite, case, model, f"provider: {exc.reason}", 0.0)
         text = resp.text
         prompt_tokens, completion_tokens, latency_ms = (
             resp.prompt_tokens,
@@ -154,12 +222,12 @@ def run_case(
             CacheEntry(text, prompt_tokens, completion_tokens, latency_ms, _now_iso(), model),
         )
 
-    failures = [
-        Failure(a.type, message, sample=1)
-        for a in case.assertions
-        for passed, message in [evaluate_assertion(a, text)]
-        if not passed
-    ]
+    failures, judge_cost, judge_cost_known, judge_model, judge_error = _evaluate(
+        case, text, config, client
+    )
+    if judge_error is not None:
+        return _error_case(suite, case, model, judge_error, judge_cost)
+
     status = "pass" if not failures else "fail"
     return CaseResult(
         suite=suite.name,
@@ -175,7 +243,9 @@ def run_case(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         cost_usd=case_cost(config.pricing, model, prompt_tokens, completion_tokens),
-        judge_cost_usd=0.0,
+        judge_cost_usd=judge_cost,
+        judge_model=judge_model,
+        judge_cost_known=judge_cost_known,
         failures=failures,
     )
 
@@ -184,8 +254,20 @@ def _aggregate(suite_results: list[SuiteResult], config: Config) -> RunTotals:
     cases = [c for sr in suite_results for c in sr.cases]
     ran = [c for c in cases if c.status != "error"]
 
-    missing_pricing = sorted({c.model for c in ran if not has_pricing(config.pricing, c.model)})
-    missing_usage = any(c.cost_usd is None and has_pricing(config.pricing, c.model) for c in ran)
+    missing_pricing = sorted(
+        {c.model for c in ran if not has_pricing(config.pricing, c.model)}
+        | {
+            c.judge_model
+            for c in ran
+            if c.judge_model and not has_pricing(config.pricing, c.judge_model)
+        }
+    )
+    missing_usage = any(
+        c.cost_usd is None and has_pricing(config.pricing, c.model) for c in ran
+    ) or any(
+        not c.judge_cost_known and c.judge_model and has_pricing(config.pricing, c.judge_model)
+        for c in ran
+    )
     cost_known = not missing_pricing and not missing_usage
     partial_reason = None
     if missing_pricing:

@@ -59,3 +59,9 @@ def transport_factory():
         return RecordingTransport(handler)
 
     return make
+
+
+@pytest.fixture(autouse=True)
+def _fast_retries(monkeypatch):
+    """Zero the retry backoff so error-path tests do not actually sleep."""
+    monkeypatch.setattr("evalkit.provider.RETRY_BASE_DELAY", 0.0)

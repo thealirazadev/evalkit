@@ -27,12 +27,23 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   local mock HTTP server confirmed judge failure with surfaced reason, JSON/JUnit output, judge cost
   breakout, caching (incl. judge) on re-run, and budget exit 1.
 
+- Phase 3 COMPLETE and verified. Added `baseline.py` (build_snapshot, write_baseline, load_baseline
+  with corrupt/version guard, diff_against_baseline), the `evalkit baseline` command (stores on a
+  fully-passing run, refuses on failure/error with exit 1/2), `--baseline` on both commands, the
+  terminal baseline section, and the JSON `baseline` object (the diff dict). CLI refactored to share
+  `_resolve_config`/`_load_suites`/`_require_provider`/`_execute` helpers. Verified `uv run pytest`
+  153 passed, ruff + black clean; manual e2e against the local mock confirmed store-on-pass,
+  refuse-on-fail, regression diff with deltas, and cached-response reuse driving the flip.
+
 ## In progress
 
-- Phase 3: baseline snapshot (`evalkit baseline`) and regression diff (terminal + JSON).
+- Phase 4: concurrency (bounded worker pool), `-k` filter, `--quiet`/`--verbose`, TTY progress line.
 
 ## Decisions log
 
+- Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline
+  files. `docs/rules.md` enumerates five subclasses; this sixth is a small, consistent addition (the
+  boundary catches any `EvalkitError`) needed for the documented "Baseline ... is unreadable" path.
 - N-sample threshold comparison: the passing fraction is compared to the threshold at 2-decimal
   precision (`round(passed/samples, 2) >= round(threshold, 2)`). Required so that 2/3 = 0.6667 passes
   the documented `threshold: 0.67` (PRD success criterion 8); a naive float compare would fail it.

@@ -8,6 +8,7 @@ lives in ``judge.py``.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 from evalkit.suite import Assertion
@@ -57,6 +58,15 @@ def _regex(assertion: Assertion, response: str) -> AssertionResult:
     if assertion.compiled.search(response):
         return True, None
     return False, f"regex: /{assertion.pattern}/ did not match response"
+
+
+@_register("json_valid")
+def _json_valid(assertion: Assertion, response: str) -> AssertionResult:
+    try:
+        json.loads(response)
+    except (ValueError, TypeError):
+        return False, "json_valid: response is not valid JSON"
+    return True, None
 
 
 def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:

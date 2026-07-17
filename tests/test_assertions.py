@@ -68,3 +68,18 @@ def test_regex_fail_message():
     passed, message = evaluate_assertion(_regex(r"\d{4}"), "no digits")
     assert passed is False
     assert message == r"regex: /\d{4}/ did not match response"
+
+
+def test_json_valid_pass():
+    assert evaluate_assertion(Assertion(type="json_valid"), '{"a": 1}') == (True, None)
+
+
+def test_json_valid_fail_message():
+    passed, message = evaluate_assertion(Assertion(type="json_valid"), "not json")
+    assert passed is False
+    assert message == "json_valid: response is not valid JSON"
+
+
+def test_json_valid_empty_response_fails():
+    passed, _ = evaluate_assertion(Assertion(type="json_valid"), "   ")
+    assert passed is False

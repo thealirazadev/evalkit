@@ -1,0 +1,29 @@
+suite: checkout-support
+description: Support-bot answers
+model: example-model-1
+params:
+  temperature: 0
+  max_tokens: 512
+system: |
+  You are a support agent for {{product}}.
+prompt: |
+  Customer message: {{message}}
+  Reply with JSON: {"reply": "...", "escalate": true}
+cases:
+  - name: refund-request
+    vars:
+      product: Acme Store
+      message: I want a refund for order 1234.
+    assert:
+      - type: json_valid
+      - type: contains
+        value: reply
+  - name: order-status
+    vars:
+      product: Acme Store
+      message: Where is my order?
+    assert:
+      - type: contains
+        value: reply
+      - type: max_length
+        value: 5000

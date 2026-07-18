@@ -1,0 +1,13 @@
+provider:
+  base_url: https://api.example.com/v1
+  model: example-model-1
+judge:
+  model: example-judge-1
+run:
+  concurrency: 4
+  timeout_seconds: 60
+  cache: true
+suites: evals/**/*.yaml
+pricing:
+  example-model-1: {input: 3.00, output: 15.00}
+  example-judge-1: {input: 0.50, output: 1.50}

@@ -1,0 +1,15 @@
+# Example evalkit configuration. Copy and adapt for your project.
+# The API key is NOT set here; export EVALKIT_API_KEY in your environment (or .env).
+provider:
+  base_url: https://api.example.com/v1   # any chat-completions-shaped endpoint
+  model: example-model-1
+judge:
+  model: example-judge-1                 # defaults to provider.model when omitted
+run:
+  concurrency: 4
+  timeout_seconds: 60
+  cache: true
+suites: evals/**/*.yaml
+pricing:                                  # USD per 1,000,000 tokens, per model id
+  example-model-1: {input: 3.00, output: 15.00}
+  example-judge-1: {input: 0.50, output: 1.50}

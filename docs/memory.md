@@ -77,6 +77,11 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
   error text before serialization. A judge reason (delivered as a JSON ``-style escape that
   decodes to a control char) or a response excerpt (raw control chars) previously produced XML that
   a standard JUnit consumer could not parse, breaking CI ingestion of the report.
+- Quality pass (2026-07-22): N-sample pass check compares the 2-decimal-rounded passing fraction
+  against the raw threshold (`round(passed/samples, 2) >= threshold`) rather than rounding both
+  sides. Rounding the threshold too let a stricter three-decimal bar (e.g. 0.674) be met by a lower
+  true fraction (2/3 = 0.6667, since both rounded to 0.67) — a false pass. The documented
+  2/3-passes-0.67 behavior (PRD criterion 8) is preserved; only the false-pass window is closed.
 
 
 - Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline

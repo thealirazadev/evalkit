@@ -267,10 +267,12 @@ def _mean(values: list[int]) -> float:
 def _meets_threshold(passed: int, samples: int, threshold: float) -> bool:
     """True when the passing fraction meets the threshold.
 
-    Thresholds are written to about two decimals (e.g. 0.67 for two-of-three), so the
-    fraction is compared at that precision; otherwise 2/3 = 0.6667 would miss 0.67.
+    The fraction is rounded to two decimals so a threshold written to two decimals is met
+    by its intended ratio (2/3 = 0.6667 rounds to 0.67, meeting ``threshold: 0.67``). The
+    threshold itself is compared unrounded: rounding it too would let a stricter bar like
+    0.674 be met by 0.6667 (both round to 0.67), a false pass.
     """
-    return round(passed / samples, 2) >= round(threshold, 2)
+    return round(passed / samples, 2) >= threshold
 
 
 def _sum_tokens(values: object) -> int | None:

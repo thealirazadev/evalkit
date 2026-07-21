@@ -6,7 +6,7 @@ from conftest import chat_response
 
 from evalkit.config import Config
 from evalkit.provider import build_client
-from evalkit.runner import exit_code, run_suites
+from evalkit.runner import _meets_threshold, exit_code, run_suites
 from evalkit.suite import load_suite
 
 PRICING = {"example-model-1": {"input": 3.00, "output": 15.00}}
@@ -236,6 +236,18 @@ cases:
       - type: contains
         value: reply
 """
+
+
+def test_meets_threshold_rounding():
+    # Intended: 2/3 = 0.6667 rounds to 0.67 and meets a 0.67 threshold.
+    assert _meets_threshold(2, 3, 0.67) is True
+    assert _meets_threshold(3, 3, 1.0) is True
+    # A stricter three-decimal threshold above 0.67 must NOT be met by 2/3: 0.6667 is
+    # genuinely below it. Rounding the threshold to 0.67 would be a false pass.
+    assert _meets_threshold(2, 3, 0.674) is False
+    assert _meets_threshold(2, 3, 0.671) is False
+    # A ratio below the bar still fails.
+    assert _meets_threshold(1, 3, 0.67) is False
 
 
 def test_nsample_threshold_pass(tmp_path, transport_factory):

@@ -66,6 +66,14 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
 
 ## Decisions log
 
+- Quality pass (2026-07-22): cache-key correctness fix. The key now includes `base_url` as part of
+  the request identity. Previously `{model, system, prompt, params, sample}` excluded it, so the
+  same model id pointed at two different endpoints collided and one endpoint could silently serve
+  the other's cached response (a reproducibility/correctness bug). Flagged change to
+  `docs/architecture.md` Caching section to match. Existing cache entries are keyed differently now,
+  but the cache is regenerable and gitignored, so no migration is needed.
+
+
 - Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline
   files. `docs/rules.md` enumerates five subclasses; this sixth is a small, consistent addition (the
   boundary catches any `EvalkitError`) needed for the documented "Baseline ... is unreadable" path.

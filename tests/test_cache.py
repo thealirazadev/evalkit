@@ -5,6 +5,7 @@ from evalkit.cache import CacheEntry, cache_key, read_cache, write_cache
 
 def _key(**over):
     base = dict(
+        base_url="https://api.example.com/v1",
         model="m",
         system="sys",
         prompt="hello",
@@ -17,6 +18,12 @@ def _key(**over):
 
 def test_key_is_stable():
     assert _key() == _key()
+
+
+def test_base_url_changes_key():
+    # Same model id at two endpoints must not collide: one endpoint's cached
+    # response must never be served for a request aimed at another.
+    assert _key() != _key(base_url="https://other.example.com/v1")
 
 
 def test_model_changes_key():
@@ -36,8 +43,8 @@ def test_params_change_key():
 
 
 def test_param_order_does_not_change_key():
-    assert cache_key("m", "s", "p", {"a": 1, "b": 2}, 0) == cache_key(
-        "m", "s", "p", {"b": 2, "a": 1}, 0
+    assert cache_key("u", "m", "s", "p", {"a": 1, "b": 2}, 0) == cache_key(
+        "u", "m", "s", "p", {"b": 2, "a": 1}, 0
     )
 
 

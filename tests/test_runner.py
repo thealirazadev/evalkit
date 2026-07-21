@@ -12,9 +12,9 @@ from evalkit.suite import load_suite
 PRICING = {"example-model-1": {"input": 3.00, "output": 15.00}}
 
 
-def make_config(cache=True, pricing=None):
+def make_config(cache=True, pricing=None, base_url="https://api.example.com/v1"):
     return Config(
-        base_url="https://api.example.com/v1",
+        base_url=base_url,
         api_key="secret-key",
         default_model="example-model-1",
         cli_model=None,
@@ -113,6 +113,26 @@ def test_second_run_uses_cache_zero_calls(tmp_path, transport_factory):
     assert rec.call_count == first_calls  # no new provider calls
     result = run_suites([suite], make_config(), client, cache_root)
     assert all(c.cached for c in result.suites[0].cases)
+
+
+def test_different_base_url_does_not_reuse_cache(tmp_path, transport_factory):
+    # Same model id and prompt at two different endpoints must not share a cache
+    # entry, or one endpoint would silently serve the other's response.
+    suite = _suite(tmp_path)
+    cache_root = tmp_path / "cache"
+
+    client_a, rec_a = _client(transport_factory, lambda req, n: chat_response('{"reply": "A"}'))
+    run_suites([suite], make_config(base_url="https://a.example.com/v1"), client_a, cache_root)
+    assert rec_a.call_count == 2
+
+    client_b, rec_b = _client(transport_factory, lambda req, n: chat_response('{"reply": "B"}'))
+    result_b = run_suites(
+        [suite], make_config(base_url="https://b.example.com/v1"), client_b, cache_root
+    )
+    # Endpoint B must make its own fresh calls, not read A's cached responses.
+    assert rec_b.call_count == 2
+    assert all(not c.cached for c in result_b.suites[0].cases)
+    assert result_b.suites[0].cases[0].response_excerpt == '{"reply": "B"}'
 
 
 def test_no_cache_bypasses_reads_but_writes(tmp_path, transport_factory):

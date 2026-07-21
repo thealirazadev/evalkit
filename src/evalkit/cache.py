@@ -1,8 +1,9 @@
 """Disk cache under .evalkit/cache/: key hash, read, write.
 
 Responses are cached so an unchanged suite re-runs with zero provider calls. The key
-is a SHA-256 over the canonical JSON of the request identity, so any change to model,
-system/prompt text, params, or sample index produces a different key and a fresh call.
+is a SHA-256 over the canonical JSON of the request identity, so any change to the
+endpoint (base URL), model, system/prompt text, params, or sample index produces a
+different key and a fresh call.
 """
 
 from __future__ import annotations
@@ -20,14 +21,21 @@ CACHE_VERSION = 1
 
 
 def cache_key(
+    base_url: str | None,
     model: str,
     system: str | None,
     prompt: str,
     params: dict[str, Any],
     sample: int,
 ) -> str:
-    """SHA-256 of the canonical request identity; stable across runs, sensitive to any change."""
+    """SHA-256 of the canonical request identity; stable across runs, sensitive to any change.
+
+    ``base_url`` is part of the identity: the same model id served by two different
+    endpoints can return different responses, so keying without it would let one endpoint
+    silently serve another's cached result.
+    """
     payload = {
+        "base_url": base_url,
         "model": model,
         "system": system,
         "prompt": prompt,

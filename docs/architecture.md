@@ -243,8 +243,10 @@ JSON-only nudge; if still unparseable, the case is an `error` (infrastructure pr
 ## Caching
 
 - Location: `.evalkit/cache/<hh>/<hash>.json` under the working directory, where `hash` is the
-  SHA-256 hex of the canonical JSON of `{model, system, prompt, params, sample}` (rendered text,
-  params sorted by key) and `<hh>` its first two characters.
+  SHA-256 hex of the canonical JSON of `{base_url, model, system, prompt, params, sample}`
+  (rendered text, params sorted by key) and `<hh>` its first two characters. `base_url` is part of
+  the identity because the same model id served by two endpoints can return different responses;
+  keying without it would let one endpoint silently serve another's cached result.
 - Entry contents: `{version: 1, response_text, prompt_tokens, completion_tokens, latency_ms,
   created_at, model}`.
 - Read path: on a hit, the stored response is used with zero provider calls; the case is marked

@@ -148,7 +148,7 @@ def _judge_call(
     key changes whenever either does.
     """
     base_content = build_judge_messages(assertion.rubric or "", response_text)[0]["content"]
-    key = cache_key(judge_model, None, base_content, JUDGE_PARAMS, sample)
+    key = cache_key(config.base_url, judge_model, None, base_content, JUDGE_PARAMS, sample)
 
     entry = read_cache(cache_root, key) if config.cache else None
     if entry is not None:
@@ -291,7 +291,7 @@ def _run_sample(
     sample: int,
 ) -> _Sample:
     """Run one sample: obtain the response (cache or provider) and evaluate its assertions."""
-    key = cache_key(model, system, prompt, params, sample)
+    key = cache_key(config.base_url, model, system, prompt, params, sample)
     entry = read_cache(cache_root, key) if config.cache else None
     if entry is not None:
         text = entry.response_text

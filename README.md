@@ -163,6 +163,35 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
   three concrete cases exist and show what actually varies. Rejected: a speculative multi-provider
   adapter matrix in v1 (an abstraction guessed from one example is usually the wrong one).
 
+## Benchmark
+
+`scripts/benchmark.py` measures evalkit's own per-case overhead against a mocked transport that
+returns a fixed response with zero latency. It isolates framework cost — render, dispatch,
+assertion evaluation, accounting, and cache read/write — and the difference between the fresh-call
+path and the cache-hit path.
+
+**This is not a measure of network savings.** Against a real endpoint, wall-clock is dominated by
+provider latency (often seconds per call), which the mock deliberately removes. What the table
+shows is that evalkit's own overhead stays far below the cost of the call it wraps.
+
+| run                 | total (500 cases) | per case | observed range   |
+| ------------------- | ----------------- | -------- | ---------------- |
+| uncached (all miss) | 223 ms            | 446 us   | 354–849 us/case  |
+| cached (all hit)    | 52 ms             | 105 us   | 84–190 us/case   |
+
+Cache-hit path is **4.2x faster** than the fresh-call path on identical work (observed 3.8x–4.5x
+across nine invocations). The ratio is the stable figure; the absolute per-case numbers track
+machine load and frequency scaling, so the observed range is given rather than a single best run.
+
+Conditions: 500 cases, 2 deterministic assertions each, `concurrency: 1` so wall-clock divided by
+case count is a clean per-case figure; 9 repetitions after a discarded warm-up, median per
+invocation, then median across 9 invocations. Hardware: 12th Gen Intel Core i5-1235U (12 threads),
+Linux 6.8.0 (glibc 2.39), CPython 3.12.13, x86_64, on an otherwise-active laptop. Reproduce with:
+
+```sh
+uv run python scripts/benchmark.py --cases 500 --reps 9
+```
+
 ## Test
 
 ```sh

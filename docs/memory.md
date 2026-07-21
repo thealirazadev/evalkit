@@ -133,4 +133,25 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
   `docs/phases.md` (real endpoint, TTY colour/progress, Ctrl-C, CI ingestion of the JUnit file)
   stay out of CI by design, since they require a live endpoint and a terminal.
 
+## Security dependency pass (2026-07-22)
+
+- Cleared all four open Dependabot alerts. Owner pre-approved breaking majors; each upgrade took the
+  smallest version that clears its advisory, one commit per package, full gate green after each.
+  - `python-dotenv` 1.0.1 -> 1.2.2 (GHSA-mf9w-mj56-hr94, runtime, direct; symlink following in
+    `set_key`). evalkit only calls `load_dotenv()`, never `set_key`, so real exposure was nil, but
+    the alert was on the direct pin so it was raised anyway.
+  - `pytest` 8.3.4 -> 9.0.3 (GHSA-6w46-j5rx-g56g, dev; tmpdir handling). Major bump, no test or
+    config changes needed; 168 tests still pass.
+  - `black` 24.10.0 -> 26.3.1 (GHSA-3936-cmfr-pm3m, high, dev; arbitrary file writes via cache file
+    name). Two style-year majors, but `black --check .` still reports all 33 files unchanged, so no
+    reformat commit was required. Pulls in the new `pytokens` transitive dep.
+- **Flagged doc change:** `docs/architecture.md` listed suggested pins `python-dotenv==1.0.*` and
+  dev `pytest==8.*`. Both floors are now unreachable without reopening an advisory, so the line was
+  updated to `1.2.*` / `9.*` with the advisory IDs recorded inline. No other architecture decision
+  changed; the stack, tooling, and layout are unchanged.
+- Dependabot PRs #2 (pytest 9.0.3), #3 (python-dotenv 1.2.2) and #4 (black 26.3.1) are superseded by
+  these commits and can be closed. The remaining open PRs (#5 actions, #6 runtime group, #7 ruff,
+  #8 black 26.5.1, #9 rich 15, #10 pytest 9.1.1) are routine version bumps with no advisory behind
+  them and were deliberately left out of this security pass.
+
 _Do not change `docs/PRD.md` or `docs/architecture.md` without flagging it here first._

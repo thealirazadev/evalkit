@@ -119,7 +119,9 @@ package, which catches packaging mistakes early.
 
 Suggested starting pins (verify each on PyPI at install time; exact versions are pinned in
 `pyproject.toml` and the committed `uv.lock`): `click==8.1.*`, `rich==13.9.*`, `httpx==0.28.*`,
-`PyYAML==6.0.*`, `jsonschema==4.23.*`, `python-dotenv==1.0.*`; dev `pytest==8.*`, `ruff`, `black`.
+`PyYAML==6.0.*`, `jsonschema==4.23.*`, `python-dotenv==1.2.*`; dev `pytest==9.*`, `ruff`, `black`.
+The `python-dotenv` and `pytest` floors were raised from `1.0.*` and `8.*` by security advisories
+GHSA-mf9w-mj56-hr94 and GHSA-6w46-j5rx-g56g; `pyproject.toml` and `uv.lock` remain authoritative.
 
 ## Suite file mini-spec
 

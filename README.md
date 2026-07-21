@@ -1,5 +1,9 @@
 # evalkit
 
+[![CI](https://github.com/thealirazadev/evalkit/actions/workflows/ci.yml/badge.svg)](https://github.com/thealirazadev/evalkit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
+
 evalkit is a command-line tool for prompt regression testing. You keep YAML suites in your repo —
 each one a prompt template plus test cases with variables and assertions — and `evalkit run` renders
 every case, calls the configured LLM provider API, checks the assertions, and reports pass/fail with
@@ -105,6 +109,59 @@ reason). The full mini-spec — templating rules, assertion fields, and N-sample
   stores only statuses, token counts, cost, and latency, so it is safe to commit.
 - **Never stored:** the API key. It is read from the environment, sent only as the Bearer header,
   and never logged or written.
+
+## Design decisions
+
+The trade-offs that shaped evalkit, and the alternatives they were chosen over.
+
+- **Caching makes a non-deterministic system reproducible.** An LLM endpoint is not a pure
+  function, yet a regression test has to be stable and cheap to re-run in CI. Responses are cached
+  on disk keyed by a hash of the request identity — endpoint base URL, model, rendered
+  system/prompt, params, and sample index — so an unchanged suite re-runs with zero provider calls
+  and identical results. The base URL is part of the key on purpose: the same model id served by
+  two endpoints can return different responses, and keying without it would let one endpoint
+  silently serve another's cached result. Invalidation is purely key-based (no TTL): if anything
+  that affects the output changes, the key changes and the call is fresh; otherwise the cache
+  answers. Rejected: a time-based cache (a TTL either serves stale results or defeats the point of
+  caching) and no cache at all (CI would be slow, costly, and flaky).
+
+- **N-sample with a pass threshold, instead of a single call.** A prompt tested at temperature
+  above zero is non-deterministic; a single sample makes a green/red test a coin flip. A case may
+  set `samples: k` with a `threshold` (the fraction that must pass), which is the honest way to
+  assert on a stochastic output. The measured pass ratio is rounded to two decimals so a threshold
+  written to two decimals is met by its intended ratio (2/3 = 0.6667 satisfies `threshold: 0.67`),
+  while the threshold itself is compared unrounded so a stricter bar is never met by a lower ratio.
+  Rejected: asserting on one sample (flaky) and hiding the ratio (the report always shows `2/3`).
+
+- **Judge assertions are quarantined from deterministic ones.** Every assertion except `judge` is
+  pure string/JSON logic with no network access and a stable verdict. The `judge` assertion calls a
+  second model, so it is kept visibly separate: reports label it `judge`, its failure message is
+  the judge's own reason verbatim, and its cost is tracked under a separate judge total rather than
+  folded into the model spend. An unparseable judge verdict (after one JSON-only retry) is an
+  infrastructure error, not an assertion failure — a broken judge must not read as a failing prompt.
+  Rejected: treating the judge like any other assertion (it would blur deterministic signal with a
+  probabilistic one and hide where the money and the flakiness come from).
+
+- **Exit 2 for infrastructure, exit 1 for regressions.** CI needs to tell "the harness or
+  environment broke" apart from "a prompt regressed." So configuration, suite-validation, auth, and
+  provider errors — anything that means the run could not be trusted — exit 2, while assertion
+  failures and a blown cost budget exit 1, and a clean run exits 0. Precedence is 2 beats 1 beats 0,
+  so a single errored case is never masked by surrounding passes. Rejected: collapsing every problem
+  into one non-zero code (a missing API key would be indistinguishable from a genuine regression).
+
+- **The baseline refuses to store a failing run.** A baseline is a known-good reference that later
+  runs diff against; `evalkit baseline` writes it only when every case passes and otherwise refuses
+  and writes nothing. Storing whatever happened to run would let a broken state quietly become the
+  norm, so the next regression diffs clean. The snapshot holds only statuses, sample ratios, cost,
+  and latency — no response text — so it is safe to commit and travels with the repo. Rejected:
+  storing failing baselines (enshrines a regression) and a cache-like gitignored baseline (the diff
+  is only useful in CI if the snapshot is versioned with the code).
+
+- **One provider shape until the rule of three.** evalkit speaks a single widely deployed
+  chat-completions JSON shape at a configurable base URL, with no provider SDK and no adapter
+  registry. One real driver does not justify an abstraction; the seam for a second shape waits until
+  three concrete cases exist and show what actually varies. Rejected: a speculative multi-provider
+  adapter matrix in v1 (an abstraction guessed from one example is usually the wrong one).
 
 ## Test
 

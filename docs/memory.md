@@ -55,6 +55,11 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   store/refuse/diff, `-k`, `--quiet`/`--verbose` (key never printed), `--fail-on-cost`
   over-budget (exit 1) and unenforceable (exit 2), and every documented unhappy path/exit code.
 
+- Continuous integration: `.github/workflows/ci.yml` runs the `docs/testing.md` gate on every push
+  and pull request to `main` — `uv sync --locked --extra dev`, `uv run ruff check .`,
+  `uv run black --check .`, `uv run pytest`, `uv build`, `uv run evalkit --version`. First run on
+  `main` was green (163 passed, 32 files unchanged, both artifacts built).
+
 ## In progress
 
 _Nothing in progress. All four phases plus finalization are complete and verified._
@@ -87,5 +92,13 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
   `judge` by design.
 - Test helpers imported via `from conftest import ...` (pytest prepends the tests dir); `tests/` is
   intentionally not a package to keep the src-layout import checks meaningful.
+- CI installs with `uv sync --locked --extra dev`: the dev tools (pytest, ruff, black) are a
+  `[project.optional-dependencies]` extra, which a plain `uv sync` would not install, and `--locked`
+  makes the job fail rather than silently re-resolve if `uv.lock` drifts from `pyproject.toml`.
+  uv itself is pinned to the version used locally so CI and local runs agree.
+- The suite needs no credentials in CI: the provider is driven through an injected
+  `httpx.MockTransport`, so no repository secret is configured. The manual QA checklists in
+  `docs/phases.md` (real endpoint, TTY colour/progress, Ctrl-C, CI ingestion of the JUnit file)
+  stay out of CI by design, since they require a live endpoint and a terminal.
 
 _Do not change `docs/PRD.md` or `docs/architecture.md` without flagging it here first._

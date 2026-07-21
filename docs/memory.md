@@ -60,6 +60,20 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   `uv run black --check .`, `uv run pytest`, `uv build`, `uv run evalkit --version`. First run on
   `main` was green (163 passed, 32 files unchanged, both artifacts built).
 
+- Senior quality pass (2026-07-22). Code review found and fixed three real defects, each with a
+  test that fails before and passes after: (1) cache key omitted `base_url`, so the same model id at
+  two endpoints collided and one could serve the other's cached response; (2) the JUnit reporter
+  emitted characters XML 1.0 forbids (control chars reaching failure messages via JSON-escaped judge
+  reasons, or raw in response excerpts), producing a report no standard consumer could parse;
+  (3) the N-sample check rounded the threshold as well as the ratio, letting a stricter bar such as
+  0.674 be met by 2/3. Added a regression guard asserting the API key never reaches verbose logs or
+  either report format. Areas reviewed and found sound, left alone: exit-code precedence (2 beats 1
+  on every path, including `--fail-on-cost`), judge parse-failure handling, the concurrency limiter
+  (cannot exceed the cap, cannot deadlock), JSON report schema stability, `--fail-on-cost` edge
+  cases, non-TTY behavior, and key handling. Also added README badges plus a Design decisions
+  section, `scripts/benchmark.py` with measured per-case overhead in the README, `SECURITY.md`, and
+  a grouped monthly `.github/dependabot.yml`. Verified: ruff, black, 168 tests, `uv build`, CI green.
+
 ## In progress
 
 _Nothing in progress. All four phases plus finalization are complete and verified._

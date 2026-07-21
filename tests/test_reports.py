@@ -228,6 +228,50 @@ def test_junit_error_element(tmp_path, transport_factory):
     assert "provider: 503" in error.attrib["message"]
 
 
+def test_junit_sanitizes_control_chars(tmp_path, transport_factory):
+    # A judge reason and a response excerpt are model output and may contain characters
+    # XML 1.0 forbids (an ANSI escape, NUL, vertical tab). Left raw they produce XML a
+    # standard JUnit consumer cannot parse, so the reporter must strip them. The judge
+    # delivers them as valid JSON escapes that decode to control chars; the case response
+    # carries them raw into the excerpt.
+    suite_text = """
+suite: demo
+model: example-model-1
+prompt: "x"
+cases:
+  - name: bad
+    assert:
+      - type: judge
+        rubric: The reply must not promise a refund.
+"""
+    path = tmp_path / "s.yaml"
+    path.write_text(suite_text, encoding="utf-8")
+    suite = load_suite(path, cwd=tmp_path)
+
+    def handler(req, n):
+        body = json.loads(req.content)
+        if body["model"] == "example-judge-1":
+            # Escaped in JSON, decodes to real control chars in the reason string.
+            return chat_response('{"pass": false, "reason": "promises \\u001b refund \\u0000 x"}')
+        return chat_response("resp \x07 raw \x0b text")
+
+    rec = transport_factory(handler)
+    client = build_client("https://api.example.com/v1", "secret-key", 5.0, rec.transport)
+    run = run_suites([suite], _config(), client, tmp_path / "cache")
+
+    out = tmp_path / "junit.xml"
+    write_junit_report(run, str(out))
+    raw = out.read_text(encoding="utf-8")
+    # No forbidden control characters survive into the file...
+    assert not any(c in raw for c in ("\x1b", "\x00", "\x07", "\x0b"))
+    # ...and a standard consumer parses it without error.
+    tree = ET.parse(out)
+    failure = tree.getroot().find("testsuite/testcase/failure")
+    assert failure is not None
+    assert "promises" in failure.attrib["message"] and "refund" in failure.attrib["message"]
+    assert "resp" in failure.text and "raw" in failure.text
+
+
 def test_junit_file_parses(tmp_path, transport_factory):
     run = _run(tmp_path, transport_factory)
     out = tmp_path / "junit.xml"

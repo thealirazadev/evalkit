@@ -72,6 +72,11 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
   the other's cached response (a reproducibility/correctness bug). Flagged change to
   `docs/architecture.md` Caching section to match. Existing cache entries are keyed differently now,
   but the cache is regenerable and gitignored, so no migration is needed.
+- Quality pass (2026-07-22): JUnit reporter strips characters XML 1.0 forbids (control chars other
+  than tab/newline/return, and permanently-invalid code points) from failure messages, bodies, and
+  error text before serialization. A judge reason (delivered as a JSON ``-style escape that
+  decodes to a control char) or a response excerpt (raw control chars) previously produced XML that
+  a standard JUnit consumer could not parse, breaking CI ingestion of the report.
 
 
 - Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline

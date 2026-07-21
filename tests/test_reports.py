@@ -1,6 +1,8 @@
 """JSON report: documented schema, judge reasons, and write errors."""
 
+import io
 import json
+import logging
 import xml.etree.ElementTree as ET
 
 import jsonschema
@@ -9,6 +11,7 @@ from conftest import chat_response
 
 from evalkit.config import Config
 from evalkit.errors import ReportError
+from evalkit.logging_setup import LOGGER_NAME
 from evalkit.provider import build_client
 from evalkit.report_json import build_report, write_json_report
 from evalkit.report_junit import build_junit, write_junit_report
@@ -270,6 +273,59 @@ cases:
     assert failure is not None
     assert "promises" in failure.attrib["message"] and "refund" in failure.attrib["message"]
     assert "resp" in failure.text and "raw" in failure.text
+
+
+def test_api_key_never_in_logs_or_reports(tmp_path, transport_factory):
+    # The key is sent only as the Bearer header; it must never reach verbose logs, the
+    # JSON report, or the JUnit report. Guards the security invariant against regressions.
+    sentinel = "sk-DO-NOT-LEAK-abc123XYZ"
+    config = Config(
+        base_url="https://api.example.com/v1",
+        api_key=sentinel,
+        default_model="example-model-1",
+        cli_model=None,
+        judge_model="example-judge-1",
+        concurrency=4,
+        timeout_seconds=5,
+        cache=True,
+        suites_glob="evals/**/*.yaml",
+        pricing=PRICING,
+        no_color=True,
+        config_path=None,
+    )
+    path = tmp_path / "s.yaml"
+    path.write_text(SUITE, encoding="utf-8")
+    suite = load_suite(path, cwd=tmp_path)
+
+    def handler(req, n):
+        assert req.headers.get("Authorization") == f"Bearer {sentinel}"  # key really is sent
+        body = json.loads(req.content)
+        if body["model"] == "example-judge-1":
+            return chat_response('{"pass": false, "reason": "promises a refund"}')
+        return chat_response('{"reply": "hi"}')
+
+    # Capture the evalkit logger at DEBUG (what --verbose emits).
+    buf = io.StringIO()
+    logger = logging.getLogger(LOGGER_NAME)
+    handler_dbg = logging.StreamHandler(buf)
+    logger.addHandler(handler_dbg)
+    old_level = logger.level
+    logger.setLevel(logging.DEBUG)
+    try:
+        client = build_client(config.base_url, sentinel, 5.0, transport_factory(handler).transport)
+        run = run_suites([suite], config, client, tmp_path / "cache")
+    finally:
+        logger.removeHandler(handler_dbg)
+        logger.setLevel(old_level)
+
+    assert sentinel not in buf.getvalue()
+
+    json_out = tmp_path / "r.json"
+    junit_out = tmp_path / "r.xml"
+    write_json_report(run, config, str(json_out))
+    write_junit_report(run, str(junit_out))
+    assert sentinel not in json_out.read_text(encoding="utf-8")
+    assert sentinel not in junit_out.read_text(encoding="utf-8")
 
 
 def test_junit_file_parses(tmp_path, transport_factory):

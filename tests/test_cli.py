@@ -271,6 +271,39 @@ def test_baseline_refuses_failing_run(project):
     assert not (project.tmp_path / ".evalkit" / "baseline.json").exists()
 
 
+def test_baseline_allow_failures_stores_and_reports_fixed(project):
+    import json as _json
+
+    # Store a baseline from a failing run; the failing case is recorded as "fail".
+    project.write_suite(FAILING_SUITE)
+    stored = project(["baseline", "--allow-failures"])
+    assert stored.exit_code == 0
+    assert "Baseline stored" in stored.output
+    assert "1 failing" in stored.output
+    bpath = project.tmp_path / ".evalkit" / "baseline.json"
+    assert bpath.exists()
+    snap = _json.loads(bpath.read_text(encoding="utf-8"))
+    assert snap["cases"]["demo/ok"]["status"] == "fail"
+
+    # Same prompt (cached response), a passing assertion -> the case flips to "fixed".
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--json", "out.json"])
+    assert result.exit_code == 0
+    assert "fixed: demo/ok" in result.output
+    report = _json.loads((project.tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert report["baseline"]["fixed"] == ["demo/ok"]
+
+
+def test_baseline_allow_failures_still_refuses_errors(project):
+    import httpx
+
+    project.write_suite(PASSING_SUITE)
+    result = project(["baseline", "--allow-failures"], handler=lambda req, n: httpx.Response(503))
+    assert result.exit_code == 2
+    assert "Baseline not stored" in result.output
+    assert not (project.tmp_path / ".evalkit" / "baseline.json").exists()
+
+
 def test_run_with_corrupt_baseline_exits_2(project):
     project.write_suite(PASSING_SUITE)
     bpath = project.tmp_path / ".evalkit" / "baseline.json"

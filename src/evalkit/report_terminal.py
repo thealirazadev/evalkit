@@ -134,6 +134,15 @@ def _print_baseline_section(
     else:
         line.append("none", style="green")
     console.print(line)
+
+    fixed = diff["fixed"]
+    fixed_line = Text("  fixed: ")
+    if fixed:
+        fixed_line.append(", ".join(fixed), style="green")
+    else:
+        fixed_line.append("none", style="dim")
+    console.print(fixed_line)
+
     console.print(f"  new: {len(diff['new'])}   removed: {len(diff['removed'])}")
 
     base_totals = baseline.get("totals", {})

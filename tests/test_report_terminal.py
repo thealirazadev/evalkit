@@ -156,9 +156,28 @@ def test_baseline_section_rendered():
     out = _render(_run([_case("bad", "fail")], _totals()), baseline=baseline, diff=diff)
     assert "baseline  (.evalkit/baseline.json, created 2026-07-01)" in out
     assert "regressions: demo/bad" in out
+    assert "fixed: none" in out
     assert "new: 1   removed: 0" in out
     assert "cost:  $0.0312 -> $0.0298" in out
     assert "mean latency:  840ms -> 1120ms" in out
+
+
+def test_baseline_section_shows_fixed_cases():
+    baseline = {
+        "created_at": "2026-07-01T10:00:00Z",
+        "totals": {"cost_usd": 0.03, "mean_latency_ms": 800.0},
+    }
+    diff = {
+        "path": ".evalkit/baseline.json",
+        "regressions": [],
+        "fixed": ["demo/was-broken"],
+        "new": [],
+        "removed": [],
+        "cost_delta_usd": 0.0,
+        "mean_latency_delta_ms": 0.0,
+    }
+    out = _render(_run([_case("was-broken", "pass")], _totals()), baseline=baseline, diff=diff)
+    assert "fixed: demo/was-broken" in out
 
 
 def test_progress_line_on_terminal():

@@ -201,6 +201,7 @@ def _baseline_impl(
     quiet: bool,
     verbose: bool,
     baseline_path: str,
+    allow_failures: bool,
 ) -> int:
     quiet = quiet and not verbose
     cwd = Path.cwd()
@@ -212,13 +213,15 @@ def _baseline_impl(
     result, console = _execute(config, loaded, cwd, quiet=quiet)
     render_report(console, result, quiet=quiet)
 
-    code = exit_code(result)
-    if code != 0:
-        failing = result.totals.failed + result.totals.errors
-        _fail(f"Error: Baseline not stored: {failing} case(s) failing.")
-        return code
+    # Errored cases have no honest outcome to record, so they always block. Failing cases
+    # block too unless --allow-failures opts in (which makes later "fixed" diffs reachable).
+    blocking = result.totals.errors + (0 if allow_failures else result.totals.failed)
+    if blocking:
+        _fail(f"Error: Baseline not stored: {blocking} case(s) failing.")
+        return exit_code(result)
     write_baseline(result, config, baseline_path)
-    console.print(f"Baseline stored to {baseline_path} ({result.totals.cases} cases).")
+    suffix = f", {result.totals.failed} failing" if result.totals.failed else ""
+    console.print(f"Baseline stored to {baseline_path} ({result.totals.cases} cases{suffix}).")
     return 0
 
 
@@ -309,6 +312,13 @@ def run(
     default=BASELINE_DEFAULT,
     help="Where to write the baseline snapshot.",
 )
+@click.option(
+    "--allow-failures",
+    "allow_failures",
+    is_flag=True,
+    default=False,
+    help="Store the baseline even when cases fail (errored cases still refuse).",
+)
 def baseline(
     suites: tuple[str, ...],
     config_path: str | None,
@@ -320,6 +330,7 @@ def baseline(
     quiet: bool,
     verbose: bool,
     baseline_path: str,
+    allow_failures: bool,
 ) -> None:
     """Store a passing run as the baseline snapshot; refuse if any case fails."""
     code = _boundary(
@@ -334,6 +345,7 @@ def baseline(
             quiet,
             verbose,
             baseline_path,
+            allow_failures,
         )
     )
     raise SystemExit(code)

@@ -323,6 +323,34 @@ def test_baseline_rejects_k_filter(project):
     assert result.exit_code == 2  # -k is not a baseline option
 
 
+def test_cache_clear_removes_entries_and_forces_fresh_calls(project):
+    project.write_suite(PASSING_SUITE)
+    first = project(["run"])
+    assert first.exit_code == 0
+    assert project.state["rec"].call_count == 1  # one fresh call filled the cache
+
+    cleared = project(["cache", "clear"])
+    assert cleared.exit_code == 0
+    assert "Removed 1 cache entry." in cleared.output
+
+    # The cache is gone, so the next run calls the provider again.
+    again = project(["run"])
+    assert again.exit_code == 0
+    assert project.state["rec"].call_count == 1
+
+
+def test_cache_clear_empty_is_zero(project):
+    result = project(["cache", "clear"])
+    assert result.exit_code == 0
+    assert "Removed 0 cache entries." in result.output
+
+
+def test_cache_clear_bad_duration_exits_2(project):
+    result = project(["cache", "clear", "--older-than", "bogus"])
+    assert result.exit_code == 2
+    assert "Invalid --older-than 'bogus'" in result.output
+
+
 def test_json_report_includes_baseline(project):
     project.write_suite(PASSING_SUITE)
     project(["baseline"])

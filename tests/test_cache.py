@@ -1,6 +1,18 @@
 """Cache key stability and sensitivity, plus read/write round trips."""
 
-from evalkit.cache import CacheEntry, cache_key, read_cache, write_cache
+import os
+import time
+
+import pytest
+
+from evalkit.cache import (
+    CacheEntry,
+    cache_key,
+    clear_cache,
+    parse_duration,
+    read_cache,
+    write_cache,
+)
 
 
 def _key(**over):
@@ -90,3 +102,45 @@ def test_version_mismatch_is_a_miss(tmp_path):
     path = tmp_path / "ab" / "ab00.json"
     path.write_text('{"version": 99, "response_text": "x", "latency_ms": 1}', encoding="utf-8")
     assert read_cache(tmp_path, "ab00") is None
+
+
+def test_parse_duration_units():
+    assert parse_duration("45s") == 45
+    assert parse_duration("30m") == 1800
+    assert parse_duration("12h") == 43200
+    assert parse_duration("7d") == 604800
+    assert parse_duration("1w") == 604800
+    assert parse_duration("2H") == 7200  # case-insensitive unit
+
+
+@pytest.mark.parametrize("bad", ["", "7", "d", "7x", "-1d", "1.5h", "7 days"])
+def test_parse_duration_rejects_garbage(bad):
+    with pytest.raises(ValueError):
+        parse_duration(bad)
+
+
+def test_clear_cache_removes_all_entries(tmp_path):
+    write_cache(tmp_path, "aa11", _entry())
+    write_cache(tmp_path, "bb22", _entry())
+    assert clear_cache(tmp_path) == 2
+    assert read_cache(tmp_path, "aa11") is None
+    assert read_cache(tmp_path, "bb22") is None
+    # Empty shard directories are pruned.
+    assert not (tmp_path / "aa").exists()
+
+
+def test_clear_cache_missing_dir_is_zero(tmp_path):
+    assert clear_cache(tmp_path / "nope") == 0
+
+
+def test_clear_cache_older_than_filters_by_age(tmp_path):
+    write_cache(tmp_path, "aa11", _entry())  # backdated below
+    old_path = tmp_path / "aa" / "aa11.json"
+    old_time = time.time() - 3600
+    os.utime(old_path, (old_time, old_time))
+    write_cache(tmp_path, "bb22", _entry())  # fresh
+
+    # Remove only entries older than 30 minutes: the backdated one goes, the fresh stays.
+    assert clear_cache(tmp_path, older_than_seconds=1800) == 1
+    assert read_cache(tmp_path, "aa11") is None
+    assert read_cache(tmp_path, "bb22") is not None

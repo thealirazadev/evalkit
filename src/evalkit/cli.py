@@ -19,6 +19,7 @@ from rich.console import Console
 
 from evalkit import __version__
 from evalkit.baseline import diff_against_baseline, load_baseline, write_baseline
+from evalkit.cache import clear_cache, parse_duration
 from evalkit.config import Config, load_config
 from evalkit.errors import ConfigError, EvalkitError, SuiteError
 from evalkit.logging_setup import LOGGER_NAME, configure_logging
@@ -335,6 +336,38 @@ def baseline(
             baseline_path,
         )
     )
+    raise SystemExit(code)
+
+
+def _cache_clear_impl(older_than: str | None) -> int:
+    seconds: int | None = None
+    if older_than is not None:
+        try:
+            seconds = parse_duration(older_than)
+        except ValueError as exc:
+            raise ConfigError(f"Invalid --older-than '{older_than}': {exc}") from exc
+    removed = clear_cache(Path.cwd() / CACHE_SUBDIR, seconds)
+    console = Console(no_color=bool(os.environ.get("NO_COLOR")))
+    noun = "entry" if removed == 1 else "entries"
+    console.print(f"Removed {removed} cache {noun}.")
+    return 0
+
+
+@cli.group("cache")
+def cache_cmd() -> None:
+    """Manage the on-disk response cache."""
+
+
+@cache_cmd.command("clear")
+@click.option(
+    "--older-than",
+    "older_than",
+    default=None,
+    help="Only remove entries older than this age (e.g. 7d, 12h, 30m).",
+)
+def cache_clear(older_than: str | None) -> None:
+    """Remove cached provider responses under .evalkit/cache/."""
+    code = _boundary(lambda: _cache_clear_impl(older_than))
     raise SystemExit(code)
 
 

@@ -70,6 +70,20 @@ nothing and exits non-zero. The snapshot holds statuses, sample ratios, cost, an
 response text — so it is safe to commit. Subsequent runs report regressions, new/removed cases, and
 cost/latency deltas.
 
+Use `--allow-failures` to store a baseline from a run that has failing cases (a run with any errored
+case still refuses). This is how a later fix becomes visible: with a failing case recorded in the
+baseline, a subsequent run that makes it pass lists it under `fixed`.
+
+### Cache
+
+```sh
+evalkit cache clear                  # remove every cached response under .evalkit/cache/
+evalkit cache clear --older-than 7d  # remove only entries older than 7 days (s, m, h, d, w)
+```
+
+`evalkit cache clear` prints how many entries it removed and exits `0` (also when the cache is
+already empty or absent). It never prompts, so it is safe in scripts and off a TTY.
+
 ## Example run
 
 The output below is captured verbatim from a real CLI run. There is no network and no API

@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,17 @@ from typing import Any
 logger = logging.getLogger("evalkit")
 
 CACHE_VERSION = 1
+
+_DURATION_RE = re.compile(r"^\s*(\d+)\s*([smhdw])\s*$", re.IGNORECASE)
+_UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+
+
+def parse_duration(text: str) -> int:
+    """Parse a duration like '7d' or '12h' into whole seconds; raise ValueError if malformed."""
+    match = _DURATION_RE.match(text)
+    if not match:
+        raise ValueError("expected a whole number followed by s, m, h, d, or w (e.g. 7d)")
+    return int(match.group(1)) * _UNIT_SECONDS[match.group(2).lower()]
 
 
 def cache_key(
@@ -100,3 +113,39 @@ def write_cache(cache_root: Path, key: str, entry: CacheEntry) -> None:
         tmp.replace(path)
     except OSError as exc:
         logger.debug("cache write failed key=%s error=%s", key, exc)
+
+
+def clear_cache(cache_root: Path, older_than_seconds: int | None = None) -> int:
+    """Delete cached response entries under ``cache_root``; return how many were removed.
+
+    With ``older_than_seconds`` set, only entries whose modification time is older than that
+    many seconds are removed. A missing cache directory removes nothing and returns 0.
+    """
+    if not cache_root.exists():
+        return 0
+    cutoff = time.time() - older_than_seconds if older_than_seconds is not None else None
+    removed = 0
+    for entry in cache_root.glob("*/*.json"):
+        try:
+            if cutoff is not None and entry.stat().st_mtime > cutoff:
+                continue
+            entry.unlink()
+            removed += 1
+        except OSError as exc:
+            logger.debug("cache clear skipped path=%s error=%s", entry, exc)
+    _prune_empty_shards(cache_root)
+    return removed
+
+
+def _prune_empty_shards(cache_root: Path) -> None:
+    """Remove now-empty shard directories left behind after clearing entries."""
+    try:
+        shards = list(cache_root.iterdir())
+    except OSError:
+        return
+    for shard in shards:
+        if shard.is_dir():
+            try:
+                shard.rmdir()  # only succeeds when the shard is empty
+            except OSError:
+                pass

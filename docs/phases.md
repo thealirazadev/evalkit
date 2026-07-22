@@ -200,6 +200,65 @@ quiet/verbose, and progress.
 
 ---
 
+## Phase 5 — Deferred ergonomics: cache clearing, failing baselines, suite defaults, lenient JSON
+
+Goal: land four backlog items promoted from the Backlog, each small and independently shippable and
+each leaving the tool working. A `cache clear` subcommand reclaims disk; `--allow-failures` lets a
+baseline be stored from a failing run so a later fixed case is reported as such; a suite may declare
+default `samples`/`threshold` its cases inherit; and `json_valid`/`json_schema` gain an opt-in that
+extracts JSON from a fenced block before validating. Strict/default behavior is unchanged in every
+case; each new behavior is opt-in and covered by a test that fails before and passes after.
+
+### Definition of done
+
+- `evalkit cache clear` removes cached response files under `.evalkit/cache/`, prints how many
+  entries were removed, and exits 0 (also exit 0 when the cache is absent or already empty).
+  `--older-than <duration>` (e.g. `7d`, `12h`, `30m`, `45s`) removes only entries older than that
+  age; a malformed duration is a usage error (exit 2). No interactive prompt on any path; safe
+  off-TTY.
+- `evalkit baseline --allow-failures` stores a snapshot from a run with failing cases (a run with
+  any errored case still refuses, exit 2, since an errored case has no honest outcome to record).
+  Without the flag, behavior is unchanged (refuse on any failure, exit 1). The stored message notes
+  how many cases were failing. A later `evalkit run` against such a baseline reports a now-passing
+  case under `fixed` in both the terminal baseline section and the JSON report.
+- A suite may declare top-level `samples` and/or `threshold`; each case inherits them unless it
+  sets its own. Suite-level values are validated with the same rules as case-level (`samples` an
+  integer >= 1; `threshold` a number in (0, 1]). A suite with no defaults and cases with no
+  overrides behaves exactly as before (1 sample, threshold 1.0).
+- `json_valid` and `json_schema` accept an opt-in `extract_fenced: true`. When set, the assertion
+  extracts the contents of the first fenced code block (```` ```json ```` or a plain ```` ``` ````)
+  from the response before parsing; when unset (the default) the response is parsed strictly and
+  verbatim, exactly as before. `extract_fenced` must be a boolean.
+- No new runtime dependency; stdlib plus existing deps only. Exact `==` pins unchanged; `uv.lock`
+  committed if it changes. README documents the new subcommand and flags; `docs/memory.md` records
+  the work and flags the (now-superseded) architecture notes.
+- `uv run ruff check .`, `uv run black --check .`, `uv run pytest`, and `uv build` all pass; the
+  existing suite does not regress and each feature adds at least one test.
+
+### Manual test checklist
+
+- [ ] Run a suite so the cache fills; `evalkit cache clear` prints the count removed and exits 0.
+      Run it again on the now-empty cache: `0` removed, exit 0.
+- [ ] Refill the cache, wait, then `evalkit cache clear --older-than 0s` removes everything; with a
+      large window (`--older-than 30d`) nothing is removed. `--older-than bogus` exits 2.
+- [ ] `evalkit baseline --allow-failures` on a run with one failing case stores the snapshot and
+      notes the failing count; inspect the file and see the case status `fail`.
+- [ ] Fix that case's prompt/assertion and `evalkit run`; the baseline section lists it under
+      `fixed` and the `--json` report's `baseline.fixed` contains its key.
+- [ ] A suite with top-level `samples: 3, threshold: 0.67` and a case with no overrides reports
+      `2/3`; a case overriding `samples: 1` runs once. Existing suites are unaffected.
+- [ ] A response wrapping JSON in a ```` ```json ```` block fails `json_valid` by default and passes
+      with `extract_fenced: true`; a strict (no-flag) assertion is unchanged.
+
+### Commits
+
+1. `feat: add cache clear subcommand with optional --older-than`
+2. `feat: allow baselines from failing runs via --allow-failures`
+3. `feat: inherit suite-level default samples and threshold`
+4. `feat: opt-in fenced json extraction for json assertions`
+
+---
+
 ## Phase verification (run after every phase)
 
 - [ ] `uv run pytest` passes with the provider mocked and no network access.
@@ -225,6 +284,6 @@ Unhappy paths (exercise those the phase implements):
 ## Backlog
 
 _Empty. Record out-of-scope ideas here with a one-line rationale; do not implement without
-promoting to a phase. Candidates already known: suite-level default `samples`/`threshold`, a
-`--allow-failures` flag for baselines (would make "fixed" diffs reachable), lenient JSON
-extraction from fenced responses, a cache TTL or `evalkit cache clear` subcommand._
+promoting to a phase. The four previously-listed candidates (suite-level default
+`samples`/`threshold`, a `--allow-failures` flag for baselines, lenient JSON extraction from fenced
+responses, and an `evalkit cache clear` subcommand) were promoted to Phase 5._

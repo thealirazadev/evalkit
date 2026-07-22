@@ -70,6 +70,173 @@ nothing and exits non-zero. The snapshot holds statuses, sample ratios, cost, an
 response text — so it is safe to commit. Subsequent runs report regressions, new/removed cases, and
 cost/latency deltas.
 
+## Example run
+
+The output below is captured verbatim from a real CLI run. There is no network and no API
+key: `scripts/demo.py` swaps in an `httpx.MockTransport` that returns fixed, content-keyed
+responses in place of the LLM provider API, then hands off to the ordinary `evalkit` CLI, so
+everything past the transport — rendering, assertions, the judge, cost accounting, and the
+report — is the real code path. The demo suite lives in [`examples/demo.yaml`](examples/demo.yaml).
+Reproduce any block with:
+
+```sh
+python scripts/demo.py run examples/demo.yaml          # add -k, --json, --junit, etc.
+```
+
+A passing run — one case whose response is valid JSON, matches the schema, and clears the
+judge — exits `0`:
+
+```console
+$ python scripts/demo.py run examples/demo.yaml -k refund-request
+running 1 cases...
+demo  (examples/demo.yaml)
+  pass  refund-request    0.0s     $0.0008
+
+summary
+  cases: 1   passed: 1   failed: 0   errors: 0
+  cost: $0.0008  (judge: $0.0001)   tokens: 62 in / 41 out
+  cache: 0/1 responses from cache
+  wall time: 0.0s
+```
+
+The full suite mixes a pass with two failures — one deterministic assertion and one judge
+verdict — and prints the reason under each failing case. The summary carries per-run cost
+(model spend and judge spend split out), token totals, cache hits, and wall time. It exits
+`1` because at least one case failed:
+
+```console
+$ python scripts/demo.py run examples/demo.yaml
+running 3 cases...
+demo  (examples/demo.yaml)
+  pass  refund-request    0.0s     $0.0008
+  FAIL  order-status      0.0s     $0.0008
+        contains: "escalate" not found in response
+  FAIL  refund-promise    0.0s     $0.0008
+        judge: The reply promises a specific refund outcome (a full refund today).
+
+summary
+  cases: 3   passed: 1   failed: 2   errors: 0
+  cost: $0.0024  (judge: $0.0002)   tokens: 186 in / 123 out
+  cache: 0/3 responses from cache
+  wall time: 0.0s
+```
+
+Latency reads `0.0s` here only because the mock transport answers instantly; against a real
+endpoint it is the measured per-case wall time. `--json` writes the machine-readable report
+(totals plus every case's status, accounting, and failures) that CI reads instead of scraping
+the terminal:
+
+```json
+{
+  "evalkit_version": "0.1.0",
+  "started_at": "2026-07-22T22:18:03Z",
+  "duration_ms": 7,
+  "config": {
+    "model": "example-model-1",
+    "judge_model": "example-judge-1",
+    "concurrency": 4,
+    "cache": true
+  },
+  "totals": {
+    "cases": 3,
+    "passed": 1,
+    "failed": 2,
+    "errors": 0,
+    "cost_usd": 0.002403,
+    "judge_cost_usd": 0.000242,
+    "cost_known": true,
+    "prompt_tokens": 186,
+    "completion_tokens": 123,
+    "cache_hits": 0
+  },
+  "baseline": null,
+  "suites": [
+    {
+      "name": "demo",
+      "file": "examples/demo.yaml",
+      "cases": [
+        {
+          "name": "refund-request",
+          "status": "pass",
+          "samples": 1,
+          "samples_passed": 1,
+          "threshold": 1.0,
+          "latency_ms": 0,
+          "cached": false,
+          "prompt_tokens": 62,
+          "completion_tokens": 41,
+          "cost_usd": 0.000801,
+          "failures": [],
+          "error": null
+        },
+        {
+          "name": "order-status",
+          "status": "fail",
+          "samples": 1,
+          "samples_passed": 0,
+          "threshold": 1.0,
+          "latency_ms": 0,
+          "cached": false,
+          "prompt_tokens": 62,
+          "completion_tokens": 41,
+          "cost_usd": 0.000801,
+          "failures": [
+            {
+              "assertion": "contains",
+              "message": "contains: \"escalate\" not found in response"
+            }
+          ],
+          "error": null
+        },
+        {
+          "name": "refund-promise",
+          "status": "fail",
+          "samples": 1,
+          "samples_passed": 0,
+          "threshold": 1.0,
+          "latency_ms": 0,
+          "cached": false,
+          "prompt_tokens": 62,
+          "completion_tokens": 41,
+          "cost_usd": 0.000801,
+          "failures": [
+            {
+              "assertion": "judge",
+              "message": "judge: The reply promises a specific refund outcome (a full refund today)."
+            }
+          ],
+          "error": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+`--junit` writes the same run as JUnit XML for CI test-report UIs; each failing case carries
+its assertion (or judge) message and a response excerpt:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="3" failures="2" errors="0" time="0.007">
+  <testsuite name="demo" tests="3" failures="2" errors="0" time="0.000">
+    <testcase classname="demo" name="refund-request" time="0.000" />
+    <testcase classname="demo" name="order-status" time="0.000">
+      <failure message="contains: &quot;escalate&quot; not found in response">contains: "escalate" not found in response
+
+response (first 300 chars):
+{"reply": "Order 8899 shipped on Monday and is out for delivery.", "status": "in_transit"}</failure>
+    </testcase>
+    <testcase classname="demo" name="refund-promise" time="0.000">
+      <failure message="judge: The reply promises a specific refund outcome (a full refund today).">judge: The reply promises a specific refund outcome (a full refund today).
+
+response (first 300 chars):
+{"reply": "Absolutely, I am issuing your full refund right now and the money will be back on your card today.", "escalate": false}</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+```
+
 ## Suite format
 
 A suite is one YAML document: a prompt template with `{{variables}}` and a list of cases. Each case

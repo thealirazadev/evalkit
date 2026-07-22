@@ -74,9 +74,29 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   section, `scripts/benchmark.py` with measured per-case overhead in the README, `SECURITY.md`, and
   a grouped monthly `.github/dependabot.yml`. Verified: ruff, black, 168 tests, `uv build`, CI green.
 
+- Phase 5 COMPLETE and verified (2026-07-23). Promoted the four known Backlog candidates into a new
+  Phase 5 in `docs/phases.md` (own commit) and implemented each with a test that fails before and
+  passes after, one small commit apiece:
+  - `evalkit cache clear` subcommand (`cache.clear_cache` + `cache.parse_duration`; a `cache` click
+    group with a `clear` command). Removes entries under `.evalkit/cache/`, prunes empty shards,
+    prints the count, exits 0 (0 when absent/empty). `--older-than <dur>` (s/m/h/d/w) filters by
+    file mtime; a malformed duration is a usage error (exit 2). Non-TTY safe, no prompt.
+  - `evalkit baseline --allow-failures` stores a snapshot from a failing run (errored cases still
+    refuse, exit 2). Added the `fixed:` line to the terminal baseline section so a baseline-fail ->
+    now-pass flip is visible (the JSON report already carried `fixed`); this is the "future flag"
+    architecture.md anticipated.
+  - Suite-level default `samples`/`threshold`: `load_suite` reads top-level defaults each case
+    inherits unless it overrides; extracted `_validate_samples`/`_validate_threshold` so suite- and
+    case-level share exact validation and messages. Case-level behavior byte-for-byte unchanged.
+  - Opt-in `extract_fenced` on `json_valid`/`json_schema`: extracts the first Markdown fenced block
+    before parsing; default (no flag) is strict and unchanged. Added `Assertion.extract_fenced`.
+  - Verified after each commit: `uv run ruff check .` clean, `uv run black --check .` clean,
+    `uv run pytest` 197 passed (from 168; no regressions), `uv build` clean. No new dependency;
+    `uv.lock` unchanged. README documents the subcommand and both flags.
+
 ## In progress
 
-_Nothing in progress. All four phases plus finalization are complete and verified._
+_Nothing in progress. Phases 1-5 plus finalization are complete and verified._
 
 ## Decisions log
 
@@ -98,6 +118,29 @@ _Nothing in progress. All four phases plus finalization are complete and verifie
   2/3-passes-0.67 behavior (PRD criterion 8) is preserved; only the false-pass window is closed.
 
 
+- Phase 5 (2026-07-23) — **flagged `docs/architecture.md` statements now superseded** by promoted
+  Backlog features (architecture.md itself left unedited pending owner review, per the boundary
+  rule):
+  - Caching section: "Clearing the cache is `rm -rf .evalkit/cache` — no subcommand for it in v1."
+    Now superseded by the `evalkit cache clear` subcommand (`--older-than` gives an age-based clear,
+    not a background TTL; invalidation stays purely key-based).
+  - Assertions table, `json_valid`: "no code-fence extraction in v1". Now superseded by the opt-in
+    `extract_fenced` flag on `json_valid`/`json_schema`; the strict default is unchanged, so the
+    v1 default behavior the doc describes still holds when the flag is absent.
+  - Baseline section already anticipated `--allow-failures` ("reachable only if a future flag
+    permits storing failing baselines"), so that feature confirms the doc rather than contradicting
+    it; the terminal now renders the `fixed` line the section always described.
+  - Suite mini-spec: `samples`/`threshold` are shown at case level; suite-level defaults are a
+    superset (a case with no override still behaves exactly as documented). Worth reflecting in the
+    mini-spec on the next architecture.md pass.
+- Phase 5: `evalkit cache clear --older-than` filters by file modification time rather than the
+  entry's stored `created_at`. mtime is what the filesystem tracks reliably and matches user intent
+  ("remove entries not touched in N days"); reading and parsing every entry's JSON just to get a
+  timestamp would be slower and pointless when the OS already has it.
+- Phase 5: `evalkit baseline --allow-failures` exits 0 on a successful store even though the run had
+  failing cases. The command's job is to record a baseline; if it recorded one, it succeeded. The
+  failing count is printed in the stored message. Errored cases are different — they have no honest
+  outcome to snapshot, so they always refuse (exit 2) regardless of the flag.
 - Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline
   files. `docs/rules.md` enumerates five subclasses; this sixth is a small, consistent addition (the
   boundary catches any `EvalkitError`) needed for the documented "Baseline ... is unreadable" path.

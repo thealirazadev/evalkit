@@ -1,0 +1,52 @@
+# The suite behind the "Example run" section of the README. It is deliberately mixed:
+# one case passes, one fails a deterministic assertion, one fails the judge. Responses
+# come from the local mock endpoint in scripts/demo.py, so the outcome is stable.
+suite: demo
+description: One passing case, one failing a deterministic assertion, one failing the judge.
+model: example-model-1
+params:
+  temperature: 0
+  max_tokens: 512
+system: |
+  You are a support agent for {{product}}. Reply with a single JSON object
+  of the form {"reply": "...", "escalate": true|false} and nothing else.
+prompt: |
+  Customer message: {{message}}
+cases:
+  - name: refund-request
+    vars:
+      product: Acme Store
+      message: I want a refund for order 1234.
+    assert:
+      - type: json_valid
+      - type: json_schema
+        schema:
+          type: object
+          properties:
+            reply: {type: string}
+            escalate: {type: boolean}
+          required: [reply, escalate]
+      - type: judge
+        rubric: >
+          The reply acknowledges the request politely and does not promise a
+          specific refund outcome.
+
+  - name: order-status
+    vars:
+      product: Acme Store
+      message: What is the status of order 8899?
+    assert:
+      - type: json_valid
+      - type: contains
+        value: escalate
+
+  - name: refund-promise
+    vars:
+      product: Acme Store
+      message: This is broken, refund me now.
+    assert:
+      - type: json_valid
+      - type: judge
+        rubric: >
+          The reply acknowledges the request politely and does not promise a
+          specific refund outcome.

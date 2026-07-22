@@ -185,7 +185,25 @@ def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
     return Assertion(type=atype, rubric=rubric)
 
 
-def _parse_case(raw: Any, file: str, seen: set[str]) -> Case:
+def _validate_samples(value: Any, file: str, context: str) -> int:
+    """Validate a ``samples`` value (integer >= 1); ``context`` names the case, or is empty."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise SuiteError(f"Invalid suite {file}: {context}'samples' must be an integer >= 1")
+    return value
+
+
+def _validate_threshold(value: Any, file: str, context: str) -> float:
+    """Validate a ``threshold`` (number in (0, 1]); ``context`` names the case, or is empty."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise SuiteError(f"Invalid suite {file}: {context}'threshold' must be a number")
+    if not 0 < value <= 1:
+        raise SuiteError(f"Invalid suite {file}: {context}'threshold' must be in (0, 1]")
+    return float(value)
+
+
+def _parse_case(
+    raw: Any, file: str, seen: set[str], default_samples: int, default_threshold: float
+) -> Case:
     if not isinstance(raw, Mapping):
         raise SuiteError(f"Invalid suite {file}: each case must be a mapping")
     name = raw.get("name")
@@ -210,21 +228,16 @@ def _parse_case(raw: Any, file: str, seen: set[str]) -> Case:
         raise SuiteError(f"Invalid suite {file}: {where}: 'assert' must be a non-empty list")
     assertions = tuple(_parse_assertion(a, file, name) for a in asserts_raw)
 
-    samples = raw.get("samples", 1)
-    if not isinstance(samples, int) or isinstance(samples, bool) or samples < 1:
-        raise SuiteError(f"Invalid suite {file}: {where}: 'samples' must be an integer >= 1")
-    threshold = raw.get("threshold", 1.0)
-    if isinstance(threshold, bool) or not isinstance(threshold, int | float):
-        raise SuiteError(f"Invalid suite {file}: {where}: 'threshold' must be a number")
-    if not 0 < threshold <= 1:
-        raise SuiteError(f"Invalid suite {file}: {where}: 'threshold' must be in (0, 1]")
+    context = f"{where}: "
+    samples = _validate_samples(raw.get("samples", default_samples), file, context)
+    threshold = _validate_threshold(raw.get("threshold", default_threshold), file, context)
 
     return Case(
         name=name,
         vars=dict(variables),
         assertions=assertions,
         samples=samples,
-        threshold=float(threshold),
+        threshold=threshold,
     )
 
 
@@ -257,8 +270,12 @@ def load_suite(path: Path, cwd: Path | None = None) -> Suite:
     if not isinstance(cases_raw, Sequence) or isinstance(cases_raw, str) or not cases_raw:
         raise SuiteError(f"Invalid suite {file}: 'cases' must be a non-empty list")
 
+    # Suite-level defaults each case inherits unless it sets its own.
+    default_samples = _validate_samples(data.get("samples", 1), file, "")
+    default_threshold = _validate_threshold(data.get("threshold", 1.0), file, "")
+
     seen: set[str] = set()
-    cases = tuple(_parse_case(c, file, seen) for c in cases_raw)
+    cases = tuple(_parse_case(c, file, seen, default_samples, default_threshold) for c in cases_raw)
 
     suite = Suite(
         name=name,

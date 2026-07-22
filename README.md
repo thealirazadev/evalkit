@@ -280,6 +280,9 @@ Assertion types: `contains`, `not_contains`, `regex`, `equals`, `json_valid`, `j
 reason). The full mini-spec — templating rules, assertion fields, and N-sample semantics — lives in
 [`docs/architecture.md`](docs/architecture.md).
 
+`samples` and `threshold` may also be declared at the suite level, where they become the default for
+every case; a case that sets its own value overrides the suite default.
+
 ## What leaves your machine, and what lands on disk
 
 - **Sent to the provider:** the rendered prompt (template plus case vars), your suite params, and —

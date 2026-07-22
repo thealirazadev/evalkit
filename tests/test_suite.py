@@ -233,3 +233,43 @@ def test_valid_samples_and_threshold_load(tmp_path):
     suite = load_suite(_suite_with("samples: 3\n    threshold: 0.67", tmp_path), cwd=tmp_path)
     assert suite.cases[0].samples == 3
     assert suite.cases[0].threshold == 0.67
+
+
+def test_suite_level_defaults_inherited_and_overridable(tmp_path):
+    text = """
+suite: demo
+prompt: hi
+samples: 3
+threshold: 0.67
+cases:
+  - name: inherits
+    assert: [{type: json_valid}]
+  - name: overrides
+    samples: 1
+    assert: [{type: json_valid}]
+"""
+    suite = load_suite(_write(tmp_path, text), cwd=tmp_path)
+    # The first case inherits both suite-level defaults.
+    assert suite.cases[0].samples == 3
+    assert suite.cases[0].threshold == 0.67
+    # The second overrides samples but still inherits the suite threshold.
+    assert suite.cases[1].samples == 1
+    assert suite.cases[1].threshold == 0.67
+
+
+_CASE_TAIL = "cases:\n  - name: a\n    assert: [{type: json_valid}]\n"
+
+
+def test_suite_level_samples_validated(tmp_path):
+    text = f"suite: demo\nprompt: hi\nsamples: 0\n{_CASE_TAIL}"
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    # No case prefix: the message points at the suite-level default.
+    assert exc.value.message == "Invalid suite s.yaml: 'samples' must be an integer >= 1"
+
+
+def test_suite_level_threshold_validated(tmp_path):
+    text = f"suite: demo\nprompt: hi\nthreshold: 2\n{_CASE_TAIL}"
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert exc.value.message == "Invalid suite s.yaml: 'threshold' must be in (0, 1]"

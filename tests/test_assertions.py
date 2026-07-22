@@ -111,6 +111,37 @@ def test_json_schema_validation_failure():
     assert "escalate" in message
 
 
+FENCED_JSON = 'Here you go:\n```json\n{"reply": "hi", "escalate": false}\n```\nThanks!'
+
+
+def test_json_valid_strict_rejects_fenced_by_default():
+    passed, message = evaluate_assertion(Assertion(type="json_valid"), FENCED_JSON)
+    assert passed is False
+    assert message == "json_valid: response is not valid JSON"
+
+
+def test_json_valid_extract_fenced_passes():
+    passed, _ = evaluate_assertion(Assertion(type="json_valid", extract_fenced=True), FENCED_JSON)
+    assert passed is True
+
+
+def test_json_schema_extract_fenced_validates_inner():
+    assertion = Assertion(type="json_schema", schema=SCHEMA, extract_fenced=True)
+    assert evaluate_assertion(assertion, FENCED_JSON) == (True, None)
+
+
+def test_extract_fenced_plain_json_still_passes():
+    # No fence present: opting in must not break a response that is already plain JSON.
+    passed, _ = evaluate_assertion(Assertion(type="json_valid", extract_fenced=True), '{"a": 1}')
+    assert passed is True
+
+
+def test_extract_fenced_generic_fence_without_language_tag():
+    resp = '```\n{"a": 1}\n```'
+    passed, _ = evaluate_assertion(Assertion(type="json_valid", extract_fenced=True), resp)
+    assert passed is True
+
+
 def test_max_length_boundary_passes():
     # len == limit passes.
     assert evaluate_assertion(Assertion(type="max_length", value=5), "12345") == (True, None)

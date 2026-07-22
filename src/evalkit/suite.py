@@ -48,6 +48,7 @@ class Assertion:
     compiled: re.Pattern[str] | None = None
     schema: dict[str, Any] | None = None
     rubric: str | None = None
+    extract_fenced: bool = False
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,14 @@ def _require_str(value: Any, file: str, field_name: str) -> str:
     return value
 
 
+def _extract_fenced_flag(raw: Mapping[str, Any], file: str, where: str) -> bool:
+    """Read the opt-in ``extract_fenced`` flag for a JSON assertion; default False."""
+    value = raw.get("extract_fenced", False)
+    if not isinstance(value, bool):
+        raise SuiteError(f"Invalid suite {file}: {where}: 'extract_fenced' must be a boolean")
+    return value
+
+
 def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
     where = f'case "{case_name}"'
     if not isinstance(raw, Mapping) or "type" not in raw:
@@ -162,13 +171,17 @@ def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
         return Assertion(type=atype, pattern=pattern, compiled=compiled)
 
     if atype == "json_valid":
-        return Assertion(type=atype)
+        return Assertion(type=atype, extract_fenced=_extract_fenced_flag(raw, file, where))
 
     if atype == "json_schema":
         schema = raw.get("schema")
         if not isinstance(schema, Mapping):
             raise SuiteError(f"Invalid suite {file}: {where}: json_schema requires a 'schema' map")
-        return Assertion(type=atype, schema=dict(schema))
+        return Assertion(
+            type=atype,
+            schema=dict(schema),
+            extract_fenced=_extract_fenced_flag(raw, file, where),
+        )
 
     if atype == "max_length":
         value = raw.get("value")

@@ -9,6 +9,7 @@ lives in ``judge.py``.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 
 import jsonschema
@@ -19,6 +20,22 @@ AssertionResult = tuple[bool, str | None]
 Handler = Callable[[Assertion, str], AssertionResult]
 
 _HANDLERS: dict[str, Handler] = {}
+
+# A Markdown fenced block: ```json (or any/no language tag) then the content up to the
+# closing fence. Non-greedy so the first block wins; DOTALL so the body may span lines.
+_FENCED_RE = re.compile(r"```[a-zA-Z0-9_+-]*[ \t]*\r?\n(.*?)```", re.DOTALL)
+
+
+def _maybe_extract_fenced(assertion: Assertion, response: str) -> str:
+    """When opted in, return the first fenced block's contents; otherwise the response as-is.
+
+    Opt-in only (``extract_fenced``); with no fenced block the original response is returned
+    so strict parsing still applies. Default behavior is unchanged.
+    """
+    if not assertion.extract_fenced:
+        return response
+    match = _FENCED_RE.search(response)
+    return match.group(1).strip() if match else response
 
 
 def _register(atype: str) -> Callable[[Handler], Handler]:
@@ -64,8 +81,9 @@ def _regex(assertion: Assertion, response: str) -> AssertionResult:
 
 @_register("json_valid")
 def _json_valid(assertion: Assertion, response: str) -> AssertionResult:
+    text = _maybe_extract_fenced(assertion, response)
     try:
-        json.loads(response)
+        json.loads(text)
     except (ValueError, TypeError):
         return False, "json_valid: response is not valid JSON"
     return True, None
@@ -73,8 +91,9 @@ def _json_valid(assertion: Assertion, response: str) -> AssertionResult:
 
 @_register("json_schema")
 def _json_schema(assertion: Assertion, response: str) -> AssertionResult:
+    text = _maybe_extract_fenced(assertion, response)
     try:
-        instance = json.loads(response)
+        instance = json.loads(text)
     except (ValueError, TypeError):
         return False, "json_schema: response is not valid JSON"
     validator = jsonschema.Draft202012Validator(assertion.schema)

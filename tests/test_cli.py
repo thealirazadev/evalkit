@@ -384,6 +384,36 @@ def test_cache_clear_bad_duration_exits_2(project):
     assert "Invalid --older-than 'bogus'" in result.output
 
 
+FENCED_SUITE = """
+suite: demo
+model: example-model-1
+prompt: "Reply about {{topic}}"
+cases:
+  - name: ok
+    vars: {topic: refunds}
+    assert:
+      - type: json_valid
+        extract_fenced: true
+"""
+
+_FENCED_RESPONSE = '```json\n{"reply": "ok"}\n```'
+
+
+def test_extract_fenced_passes_through_cli(project):
+    project.write_suite(FENCED_SUITE)
+    result = project(["run"], handler=lambda req, n: chat_response(_FENCED_RESPONSE))
+    assert result.exit_code == 0
+    assert "pass  ok" in result.output
+
+
+def test_strict_json_valid_rejects_fenced_via_cli(project):
+    strict = FENCED_SUITE.replace("\n        extract_fenced: true", "")
+    project.write_suite(strict)
+    result = project(["run"], handler=lambda req, n: chat_response(_FENCED_RESPONSE))
+    assert result.exit_code == 1
+    assert "json_valid: response is not valid JSON" in result.output
+
+
 def test_json_report_includes_baseline(project):
     project.write_suite(PASSING_SUITE)
     project(["baseline"])

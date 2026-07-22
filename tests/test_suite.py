@@ -273,3 +273,35 @@ def test_suite_level_threshold_validated(tmp_path):
     with pytest.raises(SuiteError) as exc:
         load_suite(_write(tmp_path, text), cwd=tmp_path)
     assert exc.value.message == "Invalid suite s.yaml: 'threshold' must be in (0, 1]"
+
+
+def test_extract_fenced_defaults_false_and_opts_in(tmp_path):
+    text = """
+suite: demo
+prompt: hi
+cases:
+  - name: a
+    assert:
+      - type: json_valid
+      - type: json_schema
+        schema: {type: object}
+        extract_fenced: true
+"""
+    suite = load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert suite.cases[0].assertions[0].extract_fenced is False
+    assert suite.cases[0].assertions[1].extract_fenced is True
+
+
+def test_extract_fenced_must_be_bool(tmp_path):
+    text = """
+suite: demo
+prompt: hi
+cases:
+  - name: a
+    assert:
+      - type: json_valid
+        extract_fenced: maybe
+"""
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert "'extract_fenced' must be a boolean" in exc.value.message

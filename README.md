@@ -283,6 +283,11 @@ reason). The full mini-spec — templating rules, assertion fields, and N-sample
 `samples` and `threshold` may also be declared at the suite level, where they become the default for
 every case; a case that sets its own value overrides the suite default.
 
+`json_valid` and `json_schema` parse the response strictly by default. Add `extract_fenced: true` to
+either assertion to first pull the contents of a fenced code block (```` ```json ```` or a plain
+```` ``` ````) out of the response before validating — useful when a model wraps its JSON in
+Markdown. The default (no flag) is unchanged and still requires the whole response to be JSON.
+
 ## What leaves your machine, and what lands on disk
 
 - **Sent to the provider:** the rendered prompt (template plus case vars), your suite params, and —

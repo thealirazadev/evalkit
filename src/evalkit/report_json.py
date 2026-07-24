@@ -2,7 +2,8 @@
 
 Emits the machine-readable report documented in ``docs/architecture.md`` so CI can read
 totals, per-case status, failures, cost, latency, and cache info without parsing terminal
-output. ``baseline`` is null until a baseline exists (added in a later phase).
+output. The ``baseline`` field carries the diff against a stored baseline, or null when no
+baseline is in play.
 """
 
 from __future__ import annotations

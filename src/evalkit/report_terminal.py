@@ -107,7 +107,7 @@ class ProgressLine:
 def print_liveness(console: Console, total_cases: int, *, quiet: bool = False) -> None:
     """Off a TTY, print one plain liveness line so CI logs show the run started.
 
-    On a TTY a live progress display (a later phase) replaces this; under ``--quiet``
+    On a TTY the transient ``ProgressLine`` display replaces this; under ``--quiet``
     nothing prints.
     """
     if quiet or console.is_terminal:

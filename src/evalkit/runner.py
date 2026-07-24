@@ -1,9 +1,11 @@
 """Per-case execution, result assembly, and run aggregation.
 
-Each case runs over its ``samples`` (default 1), serially. A sample renders the prompt,
-obtains a response (cache or provider), and evaluates its assertions (deterministic plus
-judge). The case passes when ``passed / samples >= threshold``; cost sums over samples and
-latency is the mean of fresh (non-cached) samples. Concurrency arrives in a later phase.
+Cases run concurrently through a bounded ``ThreadPoolExecutor`` (sized by ``concurrency``),
+and their results are reassembled in suite-file order. Within a case, its ``samples``
+(default 1) run in sequence: each renders the prompt, obtains a response (cache or provider),
+and evaluates its assertions (deterministic plus judge). The case passes when
+``passed / samples >= threshold``; cost sums over samples and latency is the mean of fresh
+(non-cached) samples.
 """
 
 from __future__ import annotations

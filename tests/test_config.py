@@ -122,3 +122,50 @@ def test_bad_pricing_errors(tmp_path):
     _write(tmp_path, "pricing:\n  m: {input: notnum, output: 1.0}\n")
     with pytest.raises(ConfigError):
         load_config(env={}, cwd=tmp_path)
+
+
+def test_pricing_missing_output_errors(tmp_path):
+    # A different branch than non-numeric: an entry lacking one of the required keys.
+    _write(tmp_path, "pricing:\n  m: {input: 1.0}\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path)
+    assert "needs 'input' and 'output'" in exc.value.message
+    assert exc.value.exit_code == 2
+
+
+def test_bad_concurrency_in_config_errors(tmp_path):
+    _write(tmp_path, "run:\n  concurrency: 0\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path)
+    assert "'run.concurrency' must be >= 1" in exc.value.message
+
+
+def test_non_integer_timeout_in_config_errors(tmp_path):
+    _write(tmp_path, "run:\n  timeout_seconds: soon\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path)
+    assert "'run.timeout_seconds' must be an integer" in exc.value.message
+
+
+def test_non_string_suites_glob_errors(tmp_path):
+    _write(tmp_path, "suites: [a, b]\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path)
+    assert "'suites' must be a string glob" in exc.value.message
+
+
+def test_non_mapping_section_errors(tmp_path):
+    _write(tmp_path, "provider: not-a-mapping\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path)
+    assert "'provider' must be a mapping" in exc.value.message
+
+
+def test_unreadable_config_is_config_error(tmp_path):
+    # A directory at the explicit config path exercises the read-failure branch (exit 2).
+    cfgdir = tmp_path / "cfgdir"
+    cfgdir.mkdir()
+    with pytest.raises(ConfigError) as exc:
+        load_config(env={}, cwd=tmp_path, config_path=str(cfgdir))
+    assert exc.value.message.startswith("Invalid config")
+    assert exc.value.exit_code == 2

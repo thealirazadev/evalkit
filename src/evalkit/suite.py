@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import yaml
 
 from evalkit.errors import SuiteError
@@ -177,9 +178,19 @@ def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
         schema = raw.get("schema")
         if not isinstance(schema, Mapping):
             raise SuiteError(f"Invalid suite {file}: {where}: json_schema requires a 'schema' map")
+        schema = dict(schema)
+        # Check the schema against its meta-schema now, so a malformed schema fails at load
+        # (exit 2) like a bad regex, not with an opaque error mid-run when it first validates.
+        try:
+            jsonschema.Draft202012Validator.check_schema(schema)
+        except jsonschema.exceptions.SchemaError as exc:
+            reason = str(exc).splitlines()[0]
+            raise SuiteError(
+                f"Invalid suite {file}: {where}: invalid json_schema: {reason}"
+            ) from exc
         return Assertion(
             type=atype,
-            schema=dict(schema),
+            schema=schema,
             extract_fenced=_extract_fenced_flag(raw, file, where),
         )
 

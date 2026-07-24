@@ -114,6 +114,42 @@ cases:
     assert "invalid regex" in exc.value.message
 
 
+def test_invalid_json_schema_rejected_at_load(tmp_path):
+    # A malformed JSON Schema must fail at load (exit 2), like a bad regex, rather than
+    # surfacing as an opaque error the first time the assertion runs against a response.
+    text = """
+suite: demo
+prompt: hi
+cases:
+  - name: a
+    assert:
+      - type: json_schema
+        schema:
+          type: notarealtype
+"""
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert "invalid json_schema" in exc.value.message
+    assert 'case "a"' in exc.value.message
+    assert exc.value.exit_code == 2
+
+
+def test_valid_json_schema_still_loads(tmp_path):
+    text = """
+suite: demo
+prompt: hi
+cases:
+  - name: a
+    assert:
+      - type: json_schema
+        schema:
+          type: object
+          required: [reply]
+"""
+    suite = load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert suite.cases[0].assertions[0].schema == {"type": "object", "required": ["reply"]}
+
+
 def test_missing_prompt(tmp_path):
     text = "suite: demo\ncases:\n  - name: a\n    assert: [{type: json_valid}]\n"
     with pytest.raises(SuiteError) as exc:

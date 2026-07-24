@@ -94,11 +94,39 @@ non-obvious decision with its reason, so any agent can pick up where the last le
     `uv run pytest` 197 passed (from 168; no regressions), `uv build` clean. No new dependency;
     `uv.lock` unchanged. README documents the subcommand and both flags.
 
+- Repo-maturity + quality pass (2026-07-25). Ten small granular commits, gate green after each
+  (ruff, black, `uv build`), tests 197 -> 205, CI + CodeQL green on the head commit. No new
+  dependency; `uv.lock` unchanged. Added the standard OSS files this public repo lacked, each its
+  own commit and project-specific: `CONTRIBUTING.md` (uv/ruff/black/pytest/build gate, how to add an
+  assertion type or reporter, PR expectations), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),
+  `.github/ISSUE_TEMPLATE/` (bug/feature/config), `.github/PULL_REQUEST_TEMPLATE.md` (checklist tied
+  to the four gate steps), `.editorconfig` (matches black/ruff line length 100 + 2-space YAML), and
+  `CHANGELOG.md` (Keep a Changelog; a single honest `[Unreleased]` entry — no tag/release exists yet,
+  so no version was invented). Code improvements: corrected three module docstrings that still called
+  now-implemented features a "later phase" (runner concurrency, the report_json `baseline` field, the
+  report_terminal progress display); a real fix validating `json_schema` at suite load time; new
+  tests for previously-uncovered `config.py` validation branches; and an `examples/assertions-tour.yaml`
+  reference suite covering the assertion features no other example showed (regex, equals,
+  extract_fenced, inherited suite-level samples/threshold).
+
 ## In progress
 
-_Nothing in progress. Phases 1-5 plus finalization are complete and verified._
+_Nothing in progress. Phases 1-5, finalization, and the 2026-07-25 repo-maturity pass are complete
+and verified._
 
 ## Decisions log
+
+- Repo-maturity pass (2026-07-25): `json_schema` is now checked against its meta-schema in
+  `suite.py._parse_assertion` via `jsonschema.Draft202012Validator.check_schema` at load time. Before
+  this, a malformed schema (e.g. `type: notarealtype`) passed suite validation and only failed the
+  first time the assertion ran, surfacing through the CLI's last-resort boundary as
+  "Unexpected error" with exit 1. It now fails fast as a `SuiteError` (exit 2) with
+  `invalid json_schema: <reason>`, matching how a bad `regex` is compiled and rejected at load. This
+  aligns the code with architecture.md's fail-fast validation intent; no architecture statement was
+  contradicted, so nothing was flagged there.
+- Repo-maturity pass (2026-07-25): `CHANGELOG.md` records the initial feature set under
+  `[Unreleased]` only. There are no git tags and no published releases, so introducing a dated
+  `0.1.0` section would have invented a release that never happened.
 
 - Quality pass (2026-07-22): cache-key correctness fix. The key now includes `base_url` as part of
   the request identity. Previously `{model, system, prompt, params, sample}` excluded it, so the

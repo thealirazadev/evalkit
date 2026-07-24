@@ -1,0 +1,68 @@
+# A reference suite touring the assertion types and suite-level defaults that the other
+# example suites do not show: regex, equals, extract_fenced, and inherited samples/threshold.
+# Unlike examples/demo.yaml (which scripts/demo.py drives with fixed responses), this is a
+# static reference: read it for the syntax, or point it at a real endpoint with
+#     evalkit run examples/assertions-tour.yaml
+# Every assertion here is deterministic, so there is no judge model and no second-model cost.
+suite: assertions-tour
+description: One case per otherwise-undemonstrated assertion feature.
+model: example-model-1
+params:
+  temperature: 0
+  max_tokens: 256
+# Suite-level defaults: unless a case overrides them, each runs 2 samples and passes when at
+# least half pass. A case may set its own samples/threshold (see exact-ack below).
+samples: 2
+threshold: 0.5
+system: |
+  You are a support agent for {{product}}. Answer as a single JSON object.
+prompt: |
+  Customer message: {{message}}
+cases:
+  # regex: the reply must carry a four-digit order number.
+  - name: mentions-order-number
+    vars:
+      product: Acme Store
+      message: "Where is order 4821?"
+    assert:
+      - type: regex
+        pattern: '"order"\s*:\s*"?\d{4}'
+
+  # equals: an exact, whitespace-trimmed match. One deterministic sample is enough here.
+  - name: exact-ack
+    vars:
+      product: Acme Store
+      message: "Reply with only the word ACK"
+    samples: 1
+    assert:
+      - type: equals
+        value: ACK
+
+  # contains + not_contains + max_length on a single case.
+  - name: safe-and-bounded
+    vars:
+      product: Acme Store
+      message: "How do I sign in?"
+    assert:
+      - type: contains
+        value: reply
+      - type: not_contains
+        value: traceback
+      - type: max_length
+        value: 800
+
+  # extract_fenced: accept JSON the model wrapped in a Markdown code fence before validating.
+  - name: fenced-json-ok
+    vars:
+      product: Acme Store
+      message: "Return your status as JSON"
+    assert:
+      - type: json_valid
+        extract_fenced: true
+      - type: json_schema
+        extract_fenced: true
+        schema:
+          type: object
+          properties:
+            reply: {type: string}
+          required: [reply]

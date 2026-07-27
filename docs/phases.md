@@ -259,6 +259,58 @@ case; each new behavior is opt-in and covered by a test that fails before and pa
 
 ---
 
+## Phase 6: Self-contained HTML run report
+
+Goal: `evalkit run --html PATH` writes one self-contained HTML file summarizing a run, alongside
+the existing terminal, `--json`, and `--junit` outputs. It is meant to be opened in a browser and
+attached as a CI artifact, so it must render offline with nothing but the file itself.
+
+### Definition of done
+
+- `--html PATH` writes a single HTML document with inline CSS and no external requests: no `<link>`,
+  no external `src`/`href`, no CDN script, no web font, no `@import`. It opens correctly with no
+  network.
+- The document reports: overall pass/fail; per suite, each case's status with its assertion and
+  judge reasons (judge reasons verbatim) plus a response excerpt for failing cases; run totals for
+  cost (model spend and judge spend broken out), tokens, cache hits, and latency; and the
+  model/prompt metadata (evalkit version, model, judge model, concurrency, cache, start time,
+  duration, and each suite's file).
+- Every interpolated value is escaped with the same discipline as the JUnit reporter: characters
+  XML/HTML forbid are stripped and the markup-special characters `<`, `>`, `&`, `"`, `'` are escaped,
+  so control characters or markup in model output can neither break the document nor inject into it.
+- Output is deterministic for a given run: the same `RunResult` and `Config` produce a byte-identical
+  document (the reporter reads no wall clock and no environment).
+- An unwritable `--html` path raises `ReportError` (exit 2), matching `--json`/`--junit`.
+- No new dependency (stdlib `html`/string building only; no templating engine). `uv run ruff check .`,
+  `uv run black --check .`, `uv run pytest`, and `uv build` pass; the existing suite does not regress
+  and new tests cover the reporter and the flag (HTML produced, expected pass/fail and reasons
+  present, malicious/control content escaped, valid standalone document, deterministic).
+
+### Manual test checklist
+
+- [ ] `evalkit run --html report.html` on a mixed run writes the file; open it in a browser with no
+      network and see overall FAIL, every case's status, and the failing assertion/judge reasons.
+- [ ] A passing-only run shows overall PASS.
+- [ ] View source: no `<link>`, no `http(s)://` resource loads, no external `src`/`href`; all style
+      is inline.
+- [ ] A case whose judge reason contains `<script>` or quotes renders as inert escaped text, never
+      executed.
+- [ ] `evalkit run --html <an-existing-directory>` exits 2 with `Cannot write report`.
+- [ ] Re-running the same cached suite yields an identical document apart from the start time and
+      duration, which legitimately differ per run.
+
+### Commits
+
+1. `feat: add html report writer`
+2. `feat: strip control characters from html report values`
+3. `feat: write html report via --html`
+4. `docs: add example html report from the demo suite`
+
+The README, CHANGELOG, and `docs/memory.md` updates land as their own `docs:` commits, per the
+process rules.
+
+---
+
 ## Phase verification (run after every phase)
 
 - [ ] `uv run pytest` passes with the provider mocked and no network access.

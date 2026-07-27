@@ -15,6 +15,7 @@ from pathlib import Path
 from evalkit import __version__
 from evalkit.config import Config
 from evalkit.errors import ReportError
+from evalkit.report_junit import _xml_safe
 from evalkit.runner import CaseResult, RunResult
 
 RESPONSE_EXCERPT_CHARS = 300
@@ -67,8 +68,11 @@ footer { margin-top: 2rem; color: #6e6e73; font-size: 0.8rem; }
 
 
 def _safe(text: str) -> str:
-    """HTML-escape a value (quotes included) so it cannot break markup or inject."""
-    return html.escape(text, quote=True)
+    """Sanitize a value for HTML: strip characters XML/HTML forbid (the same discipline the
+    JUnit reporter applies), then escape the markup-special characters. Model output can then
+    neither break the document with control characters nor inject markup with ``<``/``&``/quotes.
+    """
+    return html.escape(_xml_safe(text), quote=True)
 
 
 def _fmt_cost(cost: float | None) -> str:

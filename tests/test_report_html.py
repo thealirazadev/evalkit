@@ -134,6 +134,42 @@ def test_html_escapes_markup(tmp_path, transport_factory):
     _parses(doc)
 
 
+def test_html_strips_control_characters(tmp_path, transport_factory):
+    # A judge reason and a response excerpt are model output and may carry characters that
+    # break or invalidate a document (an ANSI escape, NUL, vertical tab). The reporter must
+    # strip them, exactly as the JUnit reporter does. The judge delivers them as JSON escapes
+    # that decode to real control chars; the case response carries them raw into the excerpt.
+    suite_text = """
+suite: demo
+model: example-model-1
+prompt: "x"
+cases:
+  - name: bad
+    assert:
+      - type: judge
+        rubric: The reply must not promise a refund.
+"""
+    path = tmp_path / "s.yaml"
+    path.write_text(suite_text, encoding="utf-8")
+    suite = load_suite(path, cwd=tmp_path)
+
+    def handler(req, n):
+        body = json.loads(req.content)
+        if body["model"] == "example-judge-1":
+            return chat_response('{"pass": false, "reason": "promises \\u001b refund \\u0000 x"}')
+        return chat_response("resp \x07 raw \x0b text")
+
+    rec = transport_factory(handler)
+    client = build_client("https://api.example.com/v1", "secret-key", 5.0, rec.transport)
+    run = run_suites([suite], _config(), client, tmp_path / "cache")
+
+    doc = build_html(run, _config())
+    assert not any(c in doc for c in ("\x1b", "\x00", "\x07", "\x0b"))
+    assert "promises" in doc and "refund" in doc  # the reason text itself survives
+    assert "resp" in doc and "raw" in doc  # the response excerpt survives
+    _parses(doc)
+
+
 def test_html_is_deterministic(tmp_path, transport_factory):
     run = _run(tmp_path, transport_factory)
     config = _config()

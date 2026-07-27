@@ -24,6 +24,7 @@ from evalkit.config import Config, load_config
 from evalkit.errors import ConfigError, EvalkitError, SuiteError
 from evalkit.logging_setup import LOGGER_NAME, configure_logging
 from evalkit.provider import build_client
+from evalkit.report_html import write_html_report
 from evalkit.report_json import write_json_report
 from evalkit.report_junit import write_junit_report
 from evalkit.report_terminal import ProgressLine, print_liveness, render_report
@@ -154,6 +155,7 @@ def _run_impl(
     verbose: bool,
     json_path: str | None,
     junit_path: str | None,
+    html_path: str | None,
     fail_on_cost: float | None,
     baseline_path: str,
 ) -> int:
@@ -175,6 +177,8 @@ def _run_impl(
         write_json_report(result, config, json_path, diff)
     if junit_path:
         write_junit_report(result, junit_path)
+    if html_path:
+        write_html_report(result, config, html_path)
 
     code = exit_code(result)
     if fail_on_cost is not None:
@@ -242,6 +246,7 @@ def cli() -> None:
 @click.option("-k", "pattern", default=None, help="Run only cases whose suite/case key matches.")
 @click.option("--json", "json_path", type=click.Path(), default=None, help="Write JSON report.")
 @click.option("--junit", "junit_path", type=click.Path(), default=None, help="Write JUnit XML.")
+@click.option("--html", "html_path", type=click.Path(), default=None, help="Write HTML report.")
 @click.option(
     "--fail-on-cost",
     type=float,
@@ -270,6 +275,7 @@ def run(
     verbose: bool,
     json_path: str | None,
     junit_path: str | None,
+    html_path: str | None,
     fail_on_cost: float | None,
     baseline_path: str,
 ) -> None:
@@ -288,6 +294,7 @@ def run(
             verbose,
             json_path,
             junit_path,
+            html_path,
             fail_on_cost,
             baseline_path,
         )

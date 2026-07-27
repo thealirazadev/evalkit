@@ -79,7 +79,16 @@ def test_version():
 def test_run_help_lists_flags():
     result = CliRunner().invoke(cli, ["run", "--help"])
     assert result.exit_code == 0
-    for flag in ("--config", "--model", "--judge-model", "--no-cache", "--no-color", "--json"):
+    for flag in (
+        "--config",
+        "--model",
+        "--judge-model",
+        "--no-cache",
+        "--no-color",
+        "--json",
+        "--junit",
+        "--html",
+    ):
         assert flag in result.output
 
 
@@ -179,6 +188,25 @@ def test_junit_report_written(project):
     tree = ET.parse(project.tmp_path / "out.xml")
     assert tree.getroot().tag == "testsuites"
     assert tree.getroot().attrib["tests"] == "1"
+
+
+def test_html_report_written(project):
+    project.write_suite(PASSING_SUITE)
+    result = project(["run", "--html", "out.html"])
+    assert result.exit_code == 0
+    doc = (project.tmp_path / "out.html").read_text(encoding="utf-8")
+    assert doc.startswith("<!DOCTYPE html>")
+    assert '<span class="badge pass">PASS</span>' in doc
+    assert "ok" in doc  # the case name
+    assert "<link" not in doc and "https://" not in doc  # self-contained
+
+
+def test_html_report_unwritable_exits_2(project):
+    project.write_suite(PASSING_SUITE)
+    (project.tmp_path / "adir").mkdir()
+    result = project(["run", "--html", "adir"])  # a directory, not writable as a file
+    assert result.exit_code == 2
+    assert "Cannot write report" in result.output
 
 
 def test_fail_on_cost_over_budget_exits_1(project):

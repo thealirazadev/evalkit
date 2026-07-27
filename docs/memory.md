@@ -109,12 +109,43 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   reference suite covering the assertion features no other example showed (regex, equals,
   extract_fenced, inherited suite-level samples/threshold).
 
+- Phase 6 COMPLETE and verified (2026-07-27). Added a fourth reporter, `report_html.py`
+  (`build_html` + `write_html_report`), and wired `evalkit run --html PATH`. It writes one
+  self-contained HTML document: inline CSS and no external requests (no `<link>`, external
+  `src`/`href`, CDN, web font, or `@import`), so it opens offline and travels as a CI artifact. It
+  renders overall pass/fail, per-suite/per-case status with assertion and judge reasons (verbatim)
+  plus a response excerpt for failures, the cost/token/cache totals, and the model/suite metadata.
+  Every interpolated value is escaped by reusing the JUnit reporter's forbidden-character stripper
+  (`report_junit._xml_safe`) and then `html.escape(..., quote=True)`, so control characters or
+  markup in model output can neither break the document nor inject into it; the reporter reads no
+  wall clock, so output is deterministic for a given `RunResult`/`Config`. One small commit apiece
+  (writer + tests, control-char hardening + test, `--html` wiring + CLI tests, and the example
+  report `examples/demo-report.html` generated via `scripts/demo.py`). Verified after each commit:
+  `uv run ruff check .` clean, `uv run black --check .` clean, `uv run pytest` 217 passed (from 205,
+  no regressions), `uv build` clean. No new dependency (stdlib `html`/string only); `uv.lock`
+  unchanged. README and CHANGELOG document the flag; `docs/phases.md` gained Phase 6.
+
 ## In progress
 
-_Nothing in progress. Phases 1-5, finalization, and the 2026-07-25 repo-maturity pass are complete
+_Nothing in progress. Phases 1-6, finalization, and the 2026-07-25 repo-maturity pass are complete
 and verified._
 
 ## Decisions log
+
+- Phase 6 (2026-07-27): the HTML reporter reuses `report_junit._xml_safe` rather than re-deriving
+  the forbidden-character set, so the two file reporters share one source of truth for which
+  characters are stripped (the concern the JUnit hardening raised was exactly this drift). The HTML
+  reporter then adds `html.escape(..., quote=True)` for the markup-special characters, which is the
+  HTML analogue of the XML escaping the ElementTree serializer does for JUnit.
+- Phase 6 (2026-07-27) **flagged two `docs/architecture.md` statements now superseded** (doc left
+  unedited pending owner review, per the boundary rule): the Reports section opens "Terminal output
+  is specified in `docs/design.md`. The two file reporters:" (line 295) and documents `--json` and
+  `--junit`; there are now three file reporters. The "Where state lives" section says the run-result
+  tree is what "all three reporters consume" (line 374); there are now four reporters (terminal,
+  json, junit, html). Both counts should be bumped and `--html` added to the Reports section on the
+  next architecture.md pass. No architecture decision is contradicted: HTML is an additional
+  read-only consumer of the same in-memory run-result tree, adds no dependency, and writes no state
+  on disk beyond the report file the user explicitly asks for.
 
 - Repo-maturity pass (2026-07-25): `json_schema` is now checked against its meta-schema in
   `suite.py._parse_assertion` via `jsonschema.Draft202012Validator.check_schema` at load time. Before

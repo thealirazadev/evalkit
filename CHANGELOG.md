@@ -33,8 +33,10 @@ feature set on `main`.
   a later fix shows up as `fixed`. `evalkit run` diffs against the baseline when present.
 - Cost accounting from a per-model price table, with `--fail-on-cost` to exit `1` over budget and
   exit `2` when the budget cannot be honestly enforced.
-- Reports: a rich terminal summary, `--json` (machine-readable), and `--junit` (JUnit XML for CI
-  test-report UIs, sanitized of characters XML 1.0 forbids).
+- Reports: a rich terminal summary, `--json` (machine-readable), `--junit` (JUnit XML for CI
+  test-report UIs, sanitized of characters XML 1.0 forbids), and `--html` (a single self-contained
+  HTML summary with inline CSS and no external requests, escaped the same way and deterministic for
+  a given run).
 - CLI ergonomics: `-k` case filter, `--concurrency`, `--model` / `--judge-model` overrides,
   `--no-cache`, `--no-color` (and `NO_COLOR`), `--quiet` / `--verbose`, and a TTY progress line.
 - Configuration resolved once with the precedence defaults < `evalkit.yaml` < environment < flags;

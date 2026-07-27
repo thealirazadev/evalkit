@@ -1,4 +1,4 @@
-# Phases — evalkit
+# Phases - evalkit
 
 Phase N+1 does not start until the owner approves phase N. Each phase is independently shippable
 and leaves the tool working. One commit per feature/task, in the listed order, Conventional Commits
@@ -12,7 +12,7 @@ stretch goals.
 
 ---
 
-## Phase 1 — Run suites with deterministic assertions, cache, and cost accounting
+## Phase 1 - Run suites with deterministic assertions, cache, and cost accounting
 
 Goal: `evalkit run` loads and validates suites, renders templates, calls the provider (mocked in
 tests), evaluates the seven deterministic assertions, caches responses, and prints the terminal
@@ -74,7 +74,7 @@ Execution is serial in this phase.
 
 ---
 
-## Phase 2 — Judge assertion, N-sample mode, and CI-grade reports
+## Phase 2 - Judge assertion, N-sample mode, and CI-grade reports
 
 Goal: the non-deterministic testing story and the CI story. `judge` assertions run against a
 separately configured judge model and surface their reasons; cases can run k samples against a
@@ -113,7 +113,7 @@ plain and non-interactive off-TTY.
       system (or a local JUnit viewer) and see per-case results with times.
 - [ ] `evalkit run --fail-on-cost 0.000001` exits 1 naming budget and actual.
 - [ ] Remove a model's pricing and pass `--fail-on-cost`; exit 2.
-- [ ] `evalkit run | cat` — plain output, no escape codes, no hang, correct exit code preserved.
+- [ ] `evalkit run | cat` - plain output, no escape codes, no hang, correct exit code preserved.
 
 ### Commits
 
@@ -127,7 +127,7 @@ plain and non-interactive off-TTY.
 
 ---
 
-## Phase 3 — Baseline snapshot and regression diff
+## Phase 3 - Baseline snapshot and regression diff
 
 Goal: `evalkit baseline` stores a passing run; `evalkit run` diffs against it and reports flipped
 cases and cost/latency deltas.
@@ -164,7 +164,7 @@ cases and cost/latency deltas.
 
 ---
 
-## Phase 4 — Concurrency and output controls
+## Phase 4 - Concurrency and output controls
 
 Goal: runs are fast and polite, and the CLI grows the remaining ergonomics: case filtering,
 quiet/verbose, and progress.
@@ -200,7 +200,7 @@ quiet/verbose, and progress.
 
 ---
 
-## Phase 5 — Deferred ergonomics: cache clearing, failing baselines, suite defaults, lenient JSON
+## Phase 5 - Deferred ergonomics: cache clearing, failing baselines, suite defaults, lenient JSON
 
 Goal: land four backlog items promoted from the Backlog, each small and independently shippable and
 each leaving the tool working. A `cache clear` subcommand reclaims disk; `--allow-failures` lets a
@@ -322,16 +322,16 @@ process rules.
 
 Unhappy paths (exercise those the phase implements):
 
-- [ ] Invalid YAML, unknown assertion, undefined variable — exit 2, file and case named.
-- [ ] Missing `EVALKIT_API_KEY` — exit 2, key never printed.
-- [ ] Provider unreachable — retries, case `error`, exit 2, no traceback.
-- [ ] Empty suites glob / no suite files — exit 2 with the hint, not a crash.
-- [ ] Empty or whitespace-only provider response — assertions evaluate it (fails `json_valid`
+- [ ] Invalid YAML, unknown assertion, undefined variable - exit 2, file and case named.
+- [ ] Missing `EVALKIT_API_KEY` - exit 2, key never printed.
+- [ ] Provider unreachable - retries, case `error`, exit 2, no traceback.
+- [ ] Empty suites glob / no suite files - exit 2 with the hint, not a crash.
+- [ ] Empty or whitespace-only provider response - assertions evaluate it (fails `json_valid`
       etc.), no crash.
-- [ ] Very long response — `max_length` fails cleanly; terminal output stays readable; excerpts
+- [ ] Very long response - `max_length` fails cleanly; terminal output stays readable; excerpts
       truncated in JUnit.
-- [ ] Duplicate run mid-cache (two evalkit processes) — no crash; worst case a redundant fetch.
-- [ ] Re-run after deleting `.evalkit/cache/` — identical results, fresh calls.
+- [ ] Duplicate run mid-cache (two evalkit processes) - no crash; worst case a redundant fetch.
+- [ ] Re-run after deleting `.evalkit/cache/` - identical results, fresh calls.
 
 ## Backlog
 

@@ -17,7 +17,7 @@ What this change does and why. Link any related issue (`Closes #123`).
   - [ ] `uv run pytest`
   - [ ] `uv build`
 - [ ] Behavior changes are covered by a test that fails before the change and passes after.
-- [ ] Tests use the mocked transport only — no real network call and no API key required.
+- [ ] Tests use the mocked transport only - no real network call and no API key required.
 - [ ] Commits follow Conventional Commits, one discrete change each, no attribution trailers.
 - [ ] No new dependency (or it was discussed first, and `pyproject.toml` + `uv.lock` change together
       in their own commit).

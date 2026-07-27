@@ -1,4 +1,4 @@
-# Memory — evalkit
+# Memory - evalkit
 
 Running log for the implementation. Update after every meaningful chunk of work, and log every
 non-obvious decision with its reason, so any agent can pick up where the last left off.
@@ -56,7 +56,7 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   over-budget (exit 1) and unenforceable (exit 2), and every documented unhappy path/exit code.
 
 - Continuous integration: `.github/workflows/ci.yml` runs the `docs/testing.md` gate on every push
-  and pull request to `main` — `uv sync --locked --extra dev`, `uv run ruff check .`,
+  and pull request to `main` - `uv sync --locked --extra dev`, `uv run ruff check .`,
   `uv run black --check .`, `uv run pytest`, `uv build`, `uv run evalkit --version`. First run on
   `main` was green (163 passed, 32 files unchanged, both artifacts built).
 
@@ -101,7 +101,7 @@ non-obvious decision with its reason, so any agent can pick up where the last le
   assertion type or reporter, PR expectations), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),
   `.github/ISSUE_TEMPLATE/` (bug/feature/config), `.github/PULL_REQUEST_TEMPLATE.md` (checklist tied
   to the four gate steps), `.editorconfig` (matches black/ruff line length 100 + 2-space YAML), and
-  `CHANGELOG.md` (Keep a Changelog; a single honest `[Unreleased]` entry — no tag/release exists yet,
+  `CHANGELOG.md` (Keep a Changelog; a single honest `[Unreleased]` entry - no tag/release exists yet,
   so no version was invented). Code improvements: corrected three module docstrings that still called
   now-implemented features a "later phase" (runner concurrency, the report_json `baseline` field, the
   report_terminal progress display); a real fix validating `json_schema` at suite load time; new
@@ -173,14 +173,14 @@ and verified._
 - Quality pass (2026-07-22): N-sample pass check compares the 2-decimal-rounded passing fraction
   against the raw threshold (`round(passed/samples, 2) >= threshold`) rather than rounding both
   sides. Rounding the threshold too let a stricter three-decimal bar (e.g. 0.674) be met by a lower
-  true fraction (2/3 = 0.6667, since both rounded to 0.67) — a false pass. The documented
+  true fraction (2/3 = 0.6667, since both rounded to 0.67) - a false pass. The documented
   2/3-passes-0.67 behavior (PRD criterion 8) is preserved; only the false-pass window is closed.
 
 
-- Phase 5 (2026-07-23) — **flagged `docs/architecture.md` statements now superseded** by promoted
+- Phase 5 (2026-07-23) - **flagged `docs/architecture.md` statements now superseded** by promoted
   Backlog features (architecture.md itself left unedited pending owner review, per the boundary
   rule):
-  - Caching section: "Clearing the cache is `rm -rf .evalkit/cache` — no subcommand for it in v1."
+  - Caching section: "Clearing the cache is `rm -rf .evalkit/cache` - no subcommand for it in v1."
     Now superseded by the `evalkit cache clear` subcommand (`--older-than` gives an age-based clear,
     not a background TTL; invalidation stays purely key-based).
   - Assertions table, `json_valid`: "no code-fence extraction in v1". Now superseded by the opt-in
@@ -198,7 +198,7 @@ and verified._
   timestamp would be slower and pointless when the OS already has it.
 - Phase 5: `evalkit baseline --allow-failures` exits 0 on a successful store even though the run had
   failing cases. The command's job is to record a baseline; if it recorded one, it succeeded. The
-  failing count is printed in the stored message. Errored cases are different — they have no honest
+  failing count is printed in the stored message. Errored cases are different - they have no honest
   outcome to snapshot, so they always refuse (exit 2) regardless of the flag.
 - Added `BaselineError` (exit 2) to the error hierarchy for corrupt/version-mismatched baseline
   files. `docs/rules.md` enumerates five subclasses; this sixth is a small, consistent addition (the

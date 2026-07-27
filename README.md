@@ -4,8 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 
-evalkit is a command-line tool for prompt regression testing. You keep YAML suites in your repo —
-each one a prompt template plus test cases with variables and assertions — and `evalkit run` renders
+evalkit is a command-line tool for prompt regression testing. You keep YAML suites in your repo -
+each one a prompt template plus test cases with variables and assertions - and `evalkit run` renders
 every case, calls the configured LLM provider API, checks the assertions, and reports pass/fail with
 per-case cost and latency. Responses are cached on disk so re-runs are cheap and deterministic. A
 stored baseline lets later runs diff against a known-good state, and exit codes plus JSON, JUnit,
@@ -67,8 +67,8 @@ evalkit run                          # later runs diff against .evalkit/baseline
 ```
 
 `evalkit baseline` writes `.evalkit/baseline.json` only when every case passes; otherwise it stores
-nothing and exits non-zero. The snapshot holds statuses, sample ratios, cost, and latency — no
-response text — so it is safe to commit. Subsequent runs report regressions, new/removed cases, and
+nothing and exits non-zero. The snapshot holds statuses, sample ratios, cost, and latency - no
+response text - so it is safe to commit. Subsequent runs report regressions, new/removed cases, and
 cost/latency deltas.
 
 Use `--allow-failures` to store a baseline from a run that has failing cases (a run with any errored
@@ -90,16 +90,16 @@ already empty or absent). It never prompts, so it is safe in scripts and off a T
 The output below is captured verbatim from a real CLI run. There is no network and no API
 key: `scripts/demo.py` swaps in an `httpx.MockTransport` that returns fixed, content-keyed
 responses in place of the LLM provider API, then hands off to the ordinary `evalkit` CLI, so
-everything past the transport — rendering, assertions, the judge, cost accounting, and the
-report — is the real code path. The demo suite lives in [`examples/demo.yaml`](examples/demo.yaml).
+everything past the transport - rendering, assertions, the judge, cost accounting, and the
+report - is the real code path. The demo suite lives in [`examples/demo.yaml`](examples/demo.yaml).
 Reproduce any block with:
 
 ```sh
 python scripts/demo.py run examples/demo.yaml          # add -k, --json, --junit, etc.
 ```
 
-A passing run — one case whose response is valid JSON, matches the schema, and clears the
-judge — exits `0`:
+A passing run - one case whose response is valid JSON, matches the schema, and clears the
+judge - exits `0`:
 
 ```console
 $ python scripts/demo.py run examples/demo.yaml -k refund-request
@@ -114,8 +114,8 @@ summary
   wall time: 0.0s
 ```
 
-The full suite mixes a pass with two failures — one deterministic assertion and one judge
-verdict — and prints the reason under each failing case. The summary carries per-run cost
+The full suite mixes a pass with two failures - one deterministic assertion and one judge
+verdict - and prints the reason under each failing case. The summary carries per-run cost
 (model spend and judge spend split out), token totals, cache hits, and wall time. It exits
 `1` because at least one case failed:
 
@@ -285,7 +285,7 @@ cases:
 
 Assertion types: `contains`, `not_contains`, `regex`, `equals`, `json_valid`, `json_schema`,
 `max_length`, and `judge` (a separately configured judge model returns a pass/fail verdict with a
-reason). The full mini-spec — templating rules, assertion fields, and N-sample semantics — lives in
+reason). The full mini-spec - templating rules, assertion fields, and N-sample semantics - lives in
 [`docs/architecture.md`](docs/architecture.md).
 
 `samples` and `threshold` may also be declared at the suite level, where they become the default for
@@ -293,13 +293,13 @@ every case; a case that sets its own value overrides the suite default.
 
 `json_valid` and `json_schema` parse the response strictly by default. Add `extract_fenced: true` to
 either assertion to first pull the contents of a fenced code block (```` ```json ```` or a plain
-```` ``` ````) out of the response before validating — useful when a model wraps its JSON in
+```` ``` ````) out of the response before validating - useful when a model wraps its JSON in
 Markdown. The default (no flag) is unchanged and still requires the whole response to be JSON.
 
 ## What leaves your machine, and what lands on disk
 
-- **Sent to the provider:** the rendered prompt (template plus case vars), your suite params, and —
-  for `judge` assertions — the model's response embedded in the judge prompt. Nothing else: no file
+- **Sent to the provider:** the rendered prompt (template plus case vars), your suite params, and -
+  for `judge` assertions - the model's response embedded in the judge prompt. Nothing else: no file
   contents, no environment, no repo metadata. Do not put secrets in suite vars.
 - **On disk:** `.evalkit/cache/` stores provider responses in plaintext and is gitignored; treat
   cached responses with the same sensitivity as the prompts that produced them. `baseline.json`
@@ -313,8 +313,8 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
 
 - **Caching makes a non-deterministic system reproducible.** An LLM endpoint is not a pure
   function, yet a regression test has to be stable and cheap to re-run in CI. Responses are cached
-  on disk keyed by a hash of the request identity — endpoint base URL, model, rendered
-  system/prompt, params, and sample index — so an unchanged suite re-runs with zero provider calls
+  on disk keyed by a hash of the request identity - endpoint base URL, model, rendered
+  system/prompt, params, and sample index - so an unchanged suite re-runs with zero provider calls
   and identical results. The base URL is part of the key on purpose: the same model id served by
   two endpoints can return different responses, and keying without it would let one endpoint
   silently serve another's cached result. Invalidation is purely key-based (no TTL): if anything
@@ -335,13 +335,13 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
   second model, so it is kept visibly separate: reports label it `judge`, its failure message is
   the judge's own reason verbatim, and its cost is tracked under a separate judge total rather than
   folded into the model spend. An unparseable judge verdict (after one JSON-only retry) is an
-  infrastructure error, not an assertion failure — a broken judge must not read as a failing prompt.
+  infrastructure error, not an assertion failure - a broken judge must not read as a failing prompt.
   Rejected: treating the judge like any other assertion (it would blur deterministic signal with a
   probabilistic one and hide where the money and the flakiness come from).
 
 - **Exit 2 for infrastructure, exit 1 for regressions.** CI needs to tell "the harness or
   environment broke" apart from "a prompt regressed." So configuration, suite-validation, auth, and
-  provider errors — anything that means the run could not be trusted — exit 2, while assertion
+  provider errors - anything that means the run could not be trusted - exit 2, while assertion
   failures and a blown cost budget exit 1, and a clean run exits 0. Precedence is 2 beats 1 beats 0,
   so a single errored case is never masked by surrounding passes. Rejected: collapsing every problem
   into one non-zero code (a missing API key would be indistinguishable from a genuine regression).
@@ -350,7 +350,7 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
   runs diff against; `evalkit baseline` writes it only when every case passes and otherwise refuses
   and writes nothing. Storing whatever happened to run would let a broken state quietly become the
   norm, so the next regression diffs clean. The snapshot holds only statuses, sample ratios, cost,
-  and latency — no response text — so it is safe to commit and travels with the repo. Rejected:
+  and latency - no response text - so it is safe to commit and travels with the repo. Rejected:
   storing failing baselines (enshrines a regression) and a cache-like gitignored baseline (the diff
   is only useful in CI if the snapshot is versioned with the code).
 
@@ -363,8 +363,8 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
 ## Benchmark
 
 `scripts/benchmark.py` measures evalkit's own per-case overhead against a mocked transport that
-returns a fixed response with zero latency. It isolates framework cost — render, dispatch,
-assertion evaluation, accounting, and cache read/write — and the difference between the fresh-call
+returns a fixed response with zero latency. It isolates framework cost - render, dispatch,
+assertion evaluation, accounting, and cache read/write - and the difference between the fresh-call
 path and the cache-hit path.
 
 **This is not a measure of network savings.** Against a real endpoint, wall-clock is dominated by
@@ -373,10 +373,10 @@ shows is that evalkit's own overhead stays far below the cost of the call it wra
 
 | run                 | total (500 cases) | per case | observed range   |
 | ------------------- | ----------------- | -------- | ---------------- |
-| uncached (all miss) | 223 ms            | 446 us   | 354–849 us/case  |
-| cached (all hit)    | 52 ms             | 105 us   | 84–190 us/case   |
+| uncached (all miss) | 223 ms            | 446 us   | 354-849 us/case  |
+| cached (all hit)    | 52 ms             | 105 us   | 84-190 us/case   |
 
-Cache-hit path is **4.2x faster** than the fresh-call path on identical work (observed 3.8x–4.5x
+Cache-hit path is **4.2x faster** than the fresh-call path on identical work (observed 3.8x-4.5x
 across nine invocations). The ratio is the stable figure; the absolute per-case numbers track
 machine load and frequency scaling, so the observed range is given rather than a single best run.
 
@@ -399,4 +399,4 @@ uv run black --check .
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

@@ -1,4 +1,4 @@
-# Rules — evalkit
+# Rules - evalkit
 
 Binding for anyone implementing evalkit. When a habit conflicts with a rule here, follow the rule.
 
@@ -14,7 +14,7 @@ Binding for anyone implementing evalkit. When a habit conflicts with a rule here
 - **HTTP:** `httpx` only, and only inside `provider.py`. No `requests`, no provider SDKs, and no
   network calls from any other module. Tests use `httpx.MockTransport`; the suite never touches
   the network.
-- **YAML:** `yaml.safe_load` exclusively. Never `yaml.load` with a permissive loader — suite files
+- **YAML:** `yaml.safe_load` exclusively. Never `yaml.load` with a permissive loader - suite files
   are user input.
 - **JSON Schema:** the `jsonschema` library for the `json_schema` assertion. Do not hand-roll
   validation.
@@ -30,7 +30,7 @@ Binding for anyone implementing evalkit. When a habit conflicts with a rule here
 - No global mutable state; pass `Config` and `Console` explicitly.
 - No provider abstraction layer, adapter registry, or plugin system. One API shape (see
   `docs/architecture.md`); the rule of three gates any abstraction.
-- No `shell=True`, no `os.system`, no subprocesses at all — evalkit shells out to nothing.
+- No `shell=True`, no `os.system`, no subprocesses at all - evalkit shells out to nothing.
 - No printing of the API key, raw tracebacks by default, or full responses at info level.
 - No interactive prompts anywhere. evalkit is CI-first; every decision comes from flags or config.
 
@@ -42,7 +42,7 @@ Binding for anyone implementing evalkit. When a habit conflicts with a rule here
 - **Variables:** `snake_case`, descriptive (`rendered_prompt`, `cache_key`, `samples_passed`).
 - **Constants:** `UPPER_SNAKE_CASE` (`DEFAULT_CONCURRENCY = 4`, `JUDGE_PROMPT`).
 - **Classes/exceptions:** `PascalCase` (`Config`, `CaseResult`, `EvalkitError`, `ProviderError`).
-- **Case keys:** `suite/case` (slash-joined names) everywhere a case is identified across runs —
+- **Case keys:** `suite/case` (slash-joined names) everywhere a case is identified across runs -
   baseline, diff output, `-k` matching, JSON report.
 
 ### Commit format
@@ -51,7 +51,7 @@ Binding for anyone implementing evalkit. When a habit conflicts with a rule here
   `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - ONE COMMIT PER FEATURE/TASK. The commit lists in `docs/phases.md` are the intended order; do not
   batch features together or split one feature into noise commits.
-- No authorship attribution of any kind in commits — no "Generated with", no "Co-Authored-By".
+- No authorship attribution of any kind in commits - no "Generated with", no "Co-Authored-By".
 
 ### Dependencies and lockfile
 
@@ -66,7 +66,7 @@ Binding for anyone implementing evalkit. When a habit conflicts with a rule here
 
 There is no database. The disk cache and the baseline snapshot are plain JSON files, each carrying
 a `version` field; when their format changes, bump the version and handle (or cleanly reject) old
-files — never silently misread them.
+files - never silently misread them.
 
 ## Error handling and logging
 
@@ -90,7 +90,7 @@ see one friendly line per problem; `--verbose` adds detail; raw tracebacks never
 | Cost budget exceeded              | total > `--fail-on-cost`                  | `Cost budget exceeded: $<actual> > $<budget>`                           | 1    |
 | Budget set but pricing missing    | model absent from price table             | `Cannot enforce --fail-on-cost: no pricing for model <id>`              | 2    |
 | Baseline refused (failures)       | `evalkit baseline` with failing cases     | `Baseline not stored: <n> case(s) failing.`                             | 1    |
-| Corrupt cache entry               | JSON/read error in `cache.py`             | treat as a miss, log at debug, refetch — never crash the run            | n/a  |
+| Corrupt cache entry               | JSON/read error in `cache.py`             | treat as a miss, log at debug, refetch - never crash the run            | n/a  |
 | Corrupt baseline file             | JSON/version error in `baseline.py`       | `Baseline <path> is unreadable; run 'evalkit baseline' to recreate.`    | 2    |
 | Report file unwritable            | I/O error on `--json`/`--junit` path      | `Cannot write report <path>: <reason>`                                  | 2    |
 | Ctrl-C                            | `KeyboardInterrupt` at top level          | `Aborted.`                                                              | 130  |
@@ -103,7 +103,7 @@ exit 1 (failures/budget) beats 0. Exit 0 means every case ran and passed within 
 
 - `EvalkitError` base in `errors.py` carries `message`, `exit_code`, optional `detail`.
   Subclasses: `ConfigError` (2), `SuiteError` (2), `ProviderError` (2), `ReportError` (2),
-  `BudgetError` (1). Assertion failures are result data (`CaseResult`), not exceptions — a failing
+  `BudgetError` (1). Assertion failures are result data (`CaseResult`), not exceptions - a failing
   case is a normal outcome the reporters render.
 - Inner modules raise; only `cli.py` catches `EvalkitError`, prints `message` to stderr (red
   unless color is off), logs `detail` at debug, and exits with `exit_code`. `KeyboardInterrupt`
@@ -128,19 +128,19 @@ exit 1 (failures/budget) beats 0. Exit 0 means every case ran and passed within 
   `.env`; `.env` is gitignored and `.env.example` carries dummies for every variable.
 - **Never log or persist the key.** No structured field, error detail, or cache entry may include
   it. Redact `Authorization` headers if request debugging is ever added.
-- **What leaves the machine:** rendered prompts (template plus case vars), suite params, and — for
-  judge assertions — the model's response embedded in the judge prompt. Nothing else: no file
+- **What leaves the machine:** rendered prompts (template plus case vars), suite params, and - for
+  judge assertions - the model's response embedded in the judge prompt. Nothing else: no file
   contents, no environment, no repo metadata. Document this plainly in the README at
   implementation time, and warn users not to put secrets in suite vars.
 - **What lands on disk:** `.evalkit/cache/` stores provider responses in plaintext. It is
   gitignored and must stay gitignored; treat cached responses with the same sensitivity as the
   prompts that produced them. `baseline.json` stores only statuses, token counts, cost, and
-  latency — no response text — precisely so it is safe to commit.
-- **Validate all input:** suite YAML and config YAML are user input — validate structure, types,
+  latency - no response text - precisely so it is safe to commit.
+- **Validate all input:** suite YAML and config YAML are user input - validate structure, types,
   and assertion fields before any network call; reject unknown assertion types and non-scalar
   vars. Regex patterns are compiled at load time so a bad pattern fails fast. JSON from the
   provider and the judge is parsed defensively (missing fields are handled, never assumed).
-- **No protected routes to document** — evalkit is a local CLI with no server surface. Anyone who
+- **No protected routes to document** - evalkit is a local CLI with no server surface. Anyone who
   can run it with a key can do everything it does.
 
 ## Simplicity (YAGNI and KISS)
@@ -148,7 +148,7 @@ exit 1 (failures/budget) beats 0. Exit 0 means every case ran and passed within 
 - Build only what the current phase requires. No speculative features, no config options that
   nothing reads today.
 - Prefer a plain function over a class, a module over a package, a dataclass over a framework.
-- No abstraction before three real use cases — this explicitly covers provider adapters (one
+- No abstraction before three real use cases - this explicitly covers provider adapters (one
   shape in v1), reporter base classes (three concrete writers sharing an input dataclass is
   fine), and assertion plugin registries (a dict of type name to function is enough).
 - No new wrapper classes, factories, managers, or utils files without owner approval.
@@ -157,7 +157,7 @@ exit 1 (failures/budget) beats 0. Exit 0 means every case ran and passed within 
 - Use the standard library where it suffices: `hashlib` for cache keys, `xml.etree` for JUnit,
   `concurrent.futures` for the worker pool, `glob` for suite discovery.
 
-## Code style — no AI fingerprints
+## Code style - no AI fingerprints
 
 - NEVER mention any model vendor, assistant, or generation tool in code, comments, docstrings,
   commit messages, or docs. The provider is "the LLM provider API", full stop.
@@ -165,15 +165,15 @@ exit 1 (failures/budget) beats 0. Exit 0 means every case ran and passed within 
 - Comments like an experienced developer writes them: sparse, only where the logic is non-obvious
   (the cache-key canonicalization and the exit-code precedence deserve one; a loop does not).
 - No emoji in code, output, comments, commit messages, or docs.
-- Concise docstrings — one line stating intent and return; longer only when the contract is subtle
+- Concise docstrings - one line stating intent and return; longer only when the contract is subtle
   (assertion semantics, cache-key composition).
 - PEP 8 via `ruff` and `black`; type-hint public functions; keep functions small.
 
-## Boundaries — never do without asking the owner first
+## Boundaries - never do without asking the owner first
 
 - Never delete or rewrite a file wholesale; targeted edits only, and flag destructive changes
   first.
-- Never modify `docs/PRD.md` or `docs/architecture.md` without flagging it — they are the source
+- Never modify `docs/PRD.md` or `docs/architecture.md` without flagging it - they are the source
   of truth. If implementation proves them wrong, stop, note it in `docs/memory.md` (Decisions
   log), and ask.
 - Never add, remove, or bump a dependency without approval; when approved, `pyproject.toml` and

@@ -1,4 +1,4 @@
-# Architecture — evalkit
+# Architecture - evalkit
 
 evalkit is a single-process CLI. It loads YAML suites, renders each case, obtains a response for it
 (from the disk cache or the LLM provider API), evaluates assertions, and reports. State on disk is
@@ -44,7 +44,7 @@ exit code: 2 if any case errored or config/provider failed
            0 otherwise
 ```
 
-`evalkit baseline` runs the same pipeline, then writes `.evalkit/baseline.json` — but only when
+`evalkit baseline` runs the same pipeline, then writes `.evalkit/baseline.json` - but only when
 every case passed; otherwise it refuses (exit 1) and writes nothing.
 
 ## Proposed folder / file tree
@@ -99,23 +99,23 @@ package, which catches packaging mistakes early.
 
 ## Tech stack with rationale
 
-- **Python 3.12+** — the other CLIs here target 3.10+, but evalkit is a developer/CI tool where
+- **Python 3.12+** - the other CLIs here target 3.10+, but evalkit is a developer/CI tool where
   current interpreters are the norm; 3.12 keeps typing modern and drops every back-compat shim
   (the 3.10 `tomllib` gap already bit a sibling project). Documented deviation, not an accident.
-- **click** — same CLI library as the sibling CLIs: mature, small surface, native subcommand
+- **click** - same CLI library as the sibling CLIs: mature, small surface, native subcommand
   groups (`run`, `baseline`), and `CliRunner` for end-to-end tests.
-- **rich** — tables and summary output through a single `Console`; handles `NO_COLOR` and non-TTY
+- **rich** - tables and summary output through a single `Console`; handles `NO_COLOR` and non-TTY
   detection so CI logs stay plain.
-- **httpx** — direct HTTP client for the provider call. There is no provider SDK dependency
+- **httpx** - direct HTTP client for the provider call. There is no provider SDK dependency
   because evalkit targets one neutral API shape (below) at a configurable base URL; a hand-rolled
   SDK-alike would be speculative. Timeouts and connection pooling are built in, and
   `httpx.MockTransport` makes tests airtight without a mocking library.
-- **PyYAML** — suites and config are YAML; `yaml.safe_load` only.
-- **jsonschema** — implements the `json_schema` assertion correctly (draft 2020-12) instead of a
+- **PyYAML** - suites and config are YAML; `yaml.safe_load` only.
+- **jsonschema** - implements the `json_schema` assertion correctly (draft 2020-12) instead of a
   hand-rolled validator.
-- **python-dotenv** — loads a local `.env` for development convenience, matching the sibling
+- **python-dotenv** - loads a local `.env` for development convenience, matching the sibling
   projects. CI sets real environment variables.
-- **pytest**, **ruff**, **black** — same test and lint toolchain as the rest of the portfolio.
+- **pytest**, **ruff**, **black** - same test and lint toolchain as the rest of the portfolio.
 
 Suggested starting pins (verify each on PyPI at install time; exact versions are pinned in
 `pyproject.toml` and the committed `uv.lock`): `click==8.1.*`, `rich==13.9.*`, `httpx==0.28.*`,
@@ -159,7 +159,7 @@ cases:
 ### Templating
 
 - A variable is `{{name}}` (whitespace inside the braces is tolerated: `{{ name }}`), where `name`
-  matches `[A-Za-z_][A-Za-z0-9_]*`. Anything else is left verbatim — there are no conditionals,
+  matches `[A-Za-z_][A-Za-z0-9_]*`. Anything else is left verbatim - there are no conditionals,
   loops, or filters. This is deliberately not a template language.
 - Every variable referenced in `system` or `prompt` must be defined in the case's `vars`, or the
   suite fails validation (exit 2) before any provider call. Unused vars are allowed (a `--verbose`
@@ -178,7 +178,7 @@ case must pass for the sample to pass. Order in the file is the order of evaluat
 | `not_contains`| `value`   | `value` does not occur in the response                                  |
 | `regex`       | `pattern` | `re.search(pattern, response)` matches (Python syntax; invalid pattern is a load-time error) |
 | `equals`      | `value`   | the response, stripped of leading/trailing whitespace, equals `value` exactly |
-| `json_valid`  | —         | the stripped response parses with `json.loads` (no code-fence extraction in v1) |
+| `json_valid`  | -         | the stripped response parses with `json.loads` (no code-fence extraction in v1) |
 | `json_schema` | `schema`  | response parses as JSON and validates against the inline schema (implies `json_valid`) |
 | `max_length`  | `value`   | `len(response) <= value` (characters)                                   |
 | `judge`       | `rubric`  | the judge model returns `pass: true` for the response against the rubric |
@@ -197,7 +197,7 @@ the mean over fresh (non-cached) samples.
 
 ## Provider API
 
-One endpoint shape in v1 — the widely deployed chat-completions JSON shape — so any hosted or local
+One endpoint shape in v1 - the widely deployed chat-completions JSON shape - so any hosted or local
 server exposing it works by setting the base URL. A second shape waits for the rule of three.
 
 ```
@@ -227,13 +227,13 @@ Expected response fields (anything extra is ignored):
 
 Error policy, implemented once in `provider.py`:
 
-- 401/403 — abort the whole run immediately: `API key missing or invalid. Set EVALKIT_API_KEY.`,
+- 401/403 - abort the whole run immediately: `API key missing or invalid. Set EVALKIT_API_KEY.`,
   exit 2.
-- 429, 5xx, timeouts, connection errors — retry up to 3 attempts total with exponential backoff
+- 429, 5xx, timeouts, connection errors - retry up to 3 attempts total with exponential backoff
   (honor `Retry-After` when present). If still failing, the case gets status `error` with the
   reason; any errored case makes the run exit 2.
-- A 2xx response missing `choices[0].message.content` — case status `error` (malformed response).
-- Missing `usage` — the response still evaluates, but tokens/cost show `n/a` for that case and the
+- A 2xx response missing `choices[0].message.content` - case status `error` (malformed response).
+- Missing `usage` - the response still evaluates, but tokens/cost show `n/a` for that case and the
   run's cost is marked partial.
 
 Judge calls go through the same client and policy with the judge model, `temperature: 0`, and a
@@ -258,14 +258,14 @@ JSON-only nudge; if still unparseable, the case is an `error` (infrastructure pr
 - Judge calls are cached with the same mechanism (the judge prompt embeds the response and rubric,
   so the key changes whenever either does).
 - Invalidation is purely key-based; there is no TTL. Clearing the cache is `rm -rf .evalkit/cache`
-  — no subcommand for it in v1.
+  - no subcommand for it in v1.
 - The cache stores provider responses in plaintext; `.evalkit/cache/` is gitignored and must stay
-  that way (see `docs/rules.md` — Security).
+  that way (see `docs/rules.md` - Security).
 
 ## Baseline snapshot
 
 `evalkit baseline` writes `.evalkit/baseline.json` (path overridable with `--baseline`). Unlike the
-cache, this file is meant to be committed — the diff is only useful in CI if the snapshot travels
+cache, this file is meant to be committed - the diff is only useful in CI if the snapshot travels
 with the repo, which is why `.gitignore` covers `.evalkit/cache/` and not the whole directory.
 
 ```json
@@ -285,7 +285,7 @@ with the repo, which is why `.gitignore` covers `.evalkit/cache/` and not the wh
 ```
 
 On every `evalkit run`, if the baseline file exists it is loaded and the report gains a baseline
-section: regressions (baseline pass, now fail), fixed (baseline fail, now pass — reachable only if
+section: regressions (baseline pass, now fail), fixed (baseline fail, now pass - reachable only if
 a future flag permits storing failing baselines), new and removed case keys, and total cost / mean
 latency deltas. The diff never changes the exit code by itself; a regressed case is already a
 failure.
@@ -366,7 +366,7 @@ pricing:                        # USD per 1M tokens, per model id
 ```
 
 Cost is computed only from this table; there is no price discovery. A model absent from the table
-yields `n/a` cost for its cases, a warning, `cost_known: false` in the JSON report — and exit 2 if
+yields `n/a` cost for its cases, a warning, `cost_known: false` in the JSON report - and exit 2 if
 `--fail-on-cost` was requested, because the budget cannot be enforced honestly.
 
 ## Where state lives
@@ -381,7 +381,7 @@ yields `n/a` cost for its cases, a warning, `cost_known: false` in the JSON repo
 
 ## External dependencies and required environment variables
 
-External systems: the LLM provider API at the configured base URL — the only network dependency,
+External systems: the LLM provider API at the configured base URL - the only network dependency,
 used for case responses and judge verdicts.
 
 | Variable             | Required | Purpose                                                             |

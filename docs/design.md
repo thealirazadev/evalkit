@@ -1,4 +1,4 @@
-# Design — evalkit (terminal UX)
+# Design - evalkit (terminal UX)
 
 This document specifies the command-line user experience: commands, flags, output layout, color and
 `NO_COLOR`, verbosity, error style, non-TTY behavior, and exit codes. Implement this exactly;
@@ -15,7 +15,7 @@ evalkit --version | --help
 `SUITES...` are suite files or directories (directories are searched for `*.yaml`/`*.yml`). With no
 arguments, the `suites` glob from config applies (default `evals/**/*.yaml`).
 
-There are **no interactive prompts anywhere** — evalkit is CI-first. Every decision comes from
+There are **no interactive prompts anywhere** - evalkit is CI-first. Every decision comes from
 flags, config, or the environment, on a TTY or off it.
 
 ## Flags
@@ -92,13 +92,13 @@ Rules:
 - Error detail lines carry the mapped reason (`provider: ...`, `judge: ...`).
 - The baseline section appears only when a baseline file exists; `regressions: none` when clean.
 - The summary always prints, even under `--quiet`, and always includes cost, tokens, cache hits,
-  and wall time — cost/latency visibility is a hard requirement, not decoration.
+  and wall time - cost/latency visibility is a hard requirement, not decoration.
 - When cost is partial, the summary line reads `cost: $0.0083 (partial: no pricing for model-x)`.
 
 ## Progress
 
-- On a TTY (and not `--quiet`): a single-line progress display while cases run —
-  `running 7/14  checkout-support/order-status` — cleared before results print.
+- On a TTY (and not `--quiet`): a single-line progress display while cases run -
+  `running 7/14  checkout-support/order-status` - cleared before results print.
 - Off-TTY or `--quiet`: no animation. Off-TTY prints one plain line `running 14 cases...` so CI
   logs show liveness, then the results.
 
@@ -118,7 +118,7 @@ Rules:
 - **`--quiet`:** failed and errored case lines with details, baseline regressions, and the
   summary. Passing case lines and progress are suppressed. Logging at ERROR.
 - **`--verbose`:** default output plus structured key=value logs on stderr per case (see
-  `docs/rules.md` — Logging): cache hit/miss, HTTP status, attempt count, latency, tokens, cost.
+  `docs/rules.md` - Logging): cache hit/miss, HTTP status, attempt count, latency, tokens, cost.
   Never the API key; prompt/response excerpts truncated to 200 chars at debug only.
 
 ## Error message style
@@ -137,7 +137,7 @@ Rules:
 | ---- | -------------------------------------------------------------------------- |
 | 0    | Every case ran and passed; budget (if set) respected.                      |
 | 1    | One or more cases failed assertions, cost budget exceeded, or `evalkit baseline` refused to store a failing run. |
-| 2    | Config, usage, suite-validation, or provider error — including auth failure, any errored case, unenforceable `--fail-on-cost`, and click usage errors. |
+| 2    | Config, usage, suite-validation, or provider error - including auth failure, any errored case, unenforceable `--fail-on-cost`, and click usage errors. |
 | 130  | Aborted with Ctrl-C.                                                       |
 
 Precedence: 2 beats 1 beats 0. These are the single source of truth and must match

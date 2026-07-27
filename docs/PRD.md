@@ -1,4 +1,4 @@
-# PRD — evalkit
+# PRD - evalkit
 
 ## What we're building
 
@@ -15,13 +15,13 @@ without wrappers.
 
 Developers who ship LLM-backed features and treat prompts as code: prompts live in the repo, change
 in pull requests, and need tests like any other code path. They want to know, before merging, that a
-prompt edit or a model change did not break the cases they care about — and what it costs. They are
+prompt edit or a model change did not break the cases they care about - and what it costs. They are
 comfortable in a terminal, keep an API key in their environment, and run checks in CI where exit
 codes and machine-readable reports matter more than pretty output.
 
 ## Core features (prioritized)
 
-### P0 — the tool is useless without these
+### P0 - the tool is useless without these
 
 1. **YAML suite format.** Load suite files, validate them with precise error messages (bad YAML,
    unknown assertion type, undefined template variable), and render the prompt template with each
@@ -41,7 +41,7 @@ codes and machine-readable reports matter more than pretty output.
 6. **CI exit codes.** 0 all cases passed; 1 one or more cases failed (including a blown cost
    budget); 2 config, usage, or provider error. No interactive prompts anywhere.
 
-### P1 — what makes it a regression tester rather than a script
+### P1 - what makes it a regression tester rather than a script
 
 7. **LLM-as-judge assertion.** A `judge` assertion holds rubric text; a separately configurable
    judge model returns pass/fail plus a reason, and the reason is surfaced in the terminal output
@@ -58,7 +58,7 @@ codes and machine-readable reports matter more than pretty output.
     `.evalkit/baseline.json`. Subsequent `evalkit run` invocations diff against it: cases that
     flipped, new/removed cases, and cost/latency deltas.
 
-### P2 — polish
+### P2 - polish
 
 13. **Concurrency.** Run cases through a bounded worker pool (default 4) so suites finish quickly
     without hammering the provider.
@@ -82,51 +82,51 @@ codes and machine-readable reports matter more than pretty output.
 
 ## Success criteria per core feature
 
-1. **Suite format** — A documented example suite loads without warnings. A file with bad YAML, an
+1. **Suite format** - A documented example suite loads without warnings. A file with bad YAML, an
    unknown assertion type, a case missing `name`, or a `{{variable}}` not defined in the case's
    `vars` each produce a distinct one-line error naming the file (and case where relevant), exit
    code 2, and no provider calls.
-2. **Provider call** — With the provider mocked, a rendered case produces exactly one HTTP request
+2. **Provider call** - With the provider mocked, a rendered case produces exactly one HTTP request
    with the documented shape (model, messages, params) and a Bearer key header. 401/403 abort the
    run with exit 2 and a message naming `EVALKIT_API_KEY`. 429/5xx/timeouts retry up to 3 attempts
    with backoff, then mark the case as an error; any errored case makes the run exit 2. The key
    never appears in output or logs.
-3. **Deterministic assertions** — Each of the seven assertion types has unit tests covering pass
+3. **Deterministic assertions** - Each of the seven assertion types has unit tests covering pass
    and fail; failure messages name the assertion and the reason (e.g. `contains: "refund" not found
    in response`). A case passes only when every assertion passes.
-4. **Caching** — Running the same suite twice makes zero provider calls on the second run
+4. **Caching** - Running the same suite twice makes zero provider calls on the second run
    (asserted via the mock) and produces identical results. `--no-cache` forces fresh calls and
    overwrites the cached entries. Changing the model, prompt text, a variable value, or any param
    changes the cache key and forces a fresh call.
-5. **Cost/latency** — For a mocked response with known token usage and a configured price table,
+5. **Cost/latency** - For a mocked response with known token usage and a configured price table,
    the per-case cost equals the hand-computed value to four decimal places; the run summary total
    equals the sum of cases plus judge calls. A model missing from the price table shows `n/a` cost
    with a warning and marks the run's cost as partial in the JSON report.
-6. **Exit codes** — All-pass run exits 0; a run with an assertion failure exits 1; bad flags, bad
+6. **Exit codes** - All-pass run exits 0; a run with an assertion failure exits 1; bad flags, bad
    config, invalid suite, and provider auth failure each exit 2. Errors take precedence over
    failures. Verified end-to-end in CLI tests.
-7. **Judge** — With a mocked judge returning `{"pass": false, "reason": "..."}`, the case fails
+7. **Judge** - With a mocked judge returning `{"pass": false, "reason": "..."}`, the case fails
    and the reason appears verbatim in terminal output, JSON, and JUnit failure text. The judge
    model resolves separately from the case model. An unparseable judge verdict (after one retry)
    marks the case as an error, not a failure.
-8. **N-sample** — A case with `samples: 3, threshold: 0.67` passes with 2 of 3 passing samples and
+8. **N-sample** - A case with `samples: 3, threshold: 0.67` passes with 2 of 3 passing samples and
    fails with 1 of 3; the report shows `2/3` explicitly. Each sample has its own cache entry, so a
    cached N-sample case replays identically.
-9. **JSON report** — `--json out.json` writes a file matching the documented schema; a CI script
+9. **JSON report** - `--json out.json` writes a file matching the documented schema; a CI script
    can read totals, per-case status, failures, cost, and latency without parsing terminal output.
-10. **JUnit XML** — `--junit out.xml` produces XML that a standard JUnit consumer accepts: one
+10. **JUnit XML** - `--junit out.xml` produces XML that a standard JUnit consumer accepts: one
     testsuite per suite, one testcase per case, `time` set from latency, failures carrying
     assertion messages and judge reasons.
-11. **Budget** — With a total cost above the `--fail-on-cost` value, the run exits 1 and prints the
+11. **Budget** - With a total cost above the `--fail-on-cost` value, the run exits 1 and prints the
     budget and actual cost. If a model in the run has no pricing entry while the flag is set, the
     run exits 2 (budget cannot be enforced honestly).
-12. **Baseline** — `evalkit baseline` on a fully passing run writes the snapshot; on a run with
+12. **Baseline** - `evalkit baseline` on a fully passing run writes the snapshot; on a run with
     failures it refuses with exit 1 and writes nothing. A later `evalkit run` with an introduced
     failure lists that case under regressions and shows cost/latency deltas against the snapshot.
-13. **Concurrency** — With concurrency 4 and 8 slow mocked cases, wall time is roughly half the
+13. **Concurrency** - With concurrency 4 and 8 slow mocked cases, wall time is roughly half the
     serial time and never more than 4 requests are in flight (asserted via the mock).
-14. **Filter** — `-k checkout` runs only matching cases; the summary counts reflect the filtered
+14. **Filter** - `-k checkout` runs only matching cases; the summary counts reflect the filtered
     set. `-k` combined with `evalkit baseline` is a usage error (exit 2).
-15. **Output controls** — With `NO_COLOR` set or stdout not a TTY, output contains no ANSI escape
+15. **Output controls** - With `NO_COLOR` set or stdout not a TTY, output contains no ANSI escape
     codes and no progress animation. `--quiet` prints only failures and the summary; `--verbose`
     adds structured logs on stderr and never prints the key.

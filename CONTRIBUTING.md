@@ -38,13 +38,13 @@ reaches a real endpoint or requires an API key. New provider behavior is tested 
 
 ## Project layout
 
-- `src/evalkit/` — the package. Each module has one responsibility: `config.py` (resolution),
+- `src/evalkit/` - the package. Each module has one responsibility: `config.py` (resolution),
   `suite.py` (load/validate/render), `provider.py` (HTTP), `assertions.py` (deterministic checks),
   `judge.py` (LLM-as-judge), `cache.py`, `cost.py`, `runner.py` (execution + aggregation), the
   `report_*.py` writers, and `cli.py` (the click entry point and the single error boundary).
-- `tests/` — one test module per source module; `tests/` is intentionally not a package.
-- `docs/` — `PRD.md` and `architecture.md` are the source of truth; `rules.md` binds contributors.
-- `examples/` and `evals/` — runnable example suites.
+- `tests/` - one test module per source module; `tests/` is intentionally not a package.
+- `docs/` - `PRD.md` and `architecture.md` are the source of truth; `rules.md` binds contributors.
+- `examples/` and `evals/` - runnable example suites.
 
 ## How to add an assertion type
 
@@ -56,7 +56,7 @@ Deterministic assertions are pure string/JSON logic with no network access. To a
    an `Assertion`. Validate everything at load time (like `regex`, which is compiled up front) so a
    bad suite fails fast with a `SuiteError` (exit 2) before any provider call.
 3. Register a handler in `assertions.py` with `@_register("starts_with")`. It receives
-   `(assertion, response)` and returns `(passed, message)` — `message` is `None` on success and a
+   `(assertion, response)` and returns `(passed, message)` - `message` is `None` on success and a
    specific one-line reason on failure.
 4. Add tests in `tests/test_assertions.py` (pass, fail, and exact failure-message text) and, if you
    added new fields, validation tests in `tests/test_suite.py`.
@@ -72,7 +72,7 @@ Reporters consume a `RunResult` (defined in `runner.py`) and never call the prov
 
 1. Create `report_<format>.py` with a `build_<format>(run, ...)` that assembles the output and a
    `write_<format>_report(run, path, ...)` that writes it, raising `ReportError` (exit 2) on any
-   I/O failure — copy the shape of `report_json.py`.
+   I/O failure - copy the shape of `report_json.py`.
 2. Sanitize any text derived from model output for the target format (see how `report_junit.py`
    strips characters XML 1.0 forbids).
 3. Add a `--<format>` option to the `run` command in `cli.py`.
@@ -80,14 +80,14 @@ Reporters consume a `RunResult` (defined in `runner.py`) and never call the prov
 
 ## Pull request expectations
 
-- **One change per commit.** A migration, a model, a route, a reporter, its test — each is its own
+- **One change per commit.** A migration, a model, a route, a reporter, its test - each is its own
   commit in a working state. Do not batch unrelated changes or split one change into noise commits.
 - **Conventional Commits.** Short imperative subject: `type(scope): summary`. Types: `feat`, `fix`,
   `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - **No new dependency without discussion.** evalkit is intentionally lean. If a change needs one,
   raise it first; when agreed, `pyproject.toml` and `uv.lock` change together in their own commit.
 - **Keep the docs honest.** If behavior changes, update the README and add a `CHANGELOG.md` entry
-  under `Unreleased`. `docs/PRD.md` and `docs/architecture.md` are the source of truth — flag a
+  under `Unreleased`. `docs/PRD.md` and `docs/architecture.md` are the source of truth - flag a
   change to them rather than editing them silently.
 - **Match the style.** Type-hint public functions, keep functions small, and write comments only
   where the logic is non-obvious. No emoji anywhere. The provider is referred to as
@@ -97,5 +97,5 @@ Reporters consume a `RunResult` (defined in `runner.py`) and never call the prov
 
 Use the issue templates. For a bug, include the evalkit version, the command, a minimal suite or
 config that reproduces it, and the observed versus expected exit code and output. Never paste a real
-API key or real prompt data — a redacted reproduction is enough. Security issues go through the
+API key or real prompt data - a redacted reproduction is enough. Security issues go through the
 process in [SECURITY.md](SECURITY.md), not the public tracker.

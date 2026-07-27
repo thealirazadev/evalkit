@@ -15,7 +15,7 @@ Report privately through GitHub Security Advisories:
 [Report a vulnerability](https://github.com/thealirazadev/evalkit/security/advisories/new).
 
 Please do not open a public issue for a security problem, and do not include a real API key or any
-real prompt data in the report — a redacted reproduction is enough.
+real prompt data in the report - a redacted reproduction is enough.
 
 Include where practical: the version or commit, the command and configuration that triggered it, a
 minimal suite or config that reproduces it, and what you observed versus expected.
@@ -34,21 +34,21 @@ boundary is what it reads, what it sends, and what it writes to disk.
 the cache, the baseline, or any report, and never persisted anywhere. A regression test asserts the
 key is absent from verbose logs and from both report formats.
 
-**What leaves the machine.** The rendered prompt (template plus case vars), suite params, and — for
-`judge` assertions — the model's response embedded in the judge prompt. Nothing else: no file
+**What leaves the machine.** The rendered prompt (template plus case vars), suite params, and - for
+`judge` assertions - the model's response embedded in the judge prompt. Nothing else: no file
 contents, no environment, no repository metadata. Do not put secrets in suite vars; they would be
 sent to the provider and stored in the cache.
 
 **What lands on disk.** `.evalkit/cache/` holds provider responses in plaintext and is gitignored;
 treat cached responses with the same sensitivity as the prompts that produced them. Clear it with
 `rm -rf .evalkit/cache`. `.evalkit/baseline.json` stores only statuses, sample ratios, token counts,
-cost, and latency — never response text — which is why it is safe to commit.
+cost, and latency - never response text - which is why it is safe to commit.
 
 **Untrusted input.** Suite and config YAML are user input: they are parsed with `yaml.safe_load`
 only and validated (structure, types, assertion fields, regex compilation) before any network call.
 Provider and judge JSON are parsed defensively; missing or malformed fields are handled, never
 assumed. Report text derived from model output is sanitized for the format it is written into.
-evalkit never shells out — there is no `subprocess`, `os.system`, or `shell=True` anywhere.
+evalkit never shells out - there is no `subprocess`, `os.system`, or `shell=True` anywhere.
 
 ## Scope
 

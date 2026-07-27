@@ -24,7 +24,7 @@ The exact command you ran:
 evalkit run ...
 ```
 
-A minimal suite or config that triggers it (redact any real prompt data — **never paste a real API
+A minimal suite or config that triggers it (redact any real prompt data - **never paste a real API
 key**):
 
 ```yaml

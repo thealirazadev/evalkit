@@ -28,7 +28,7 @@ feature set on `main`.
   model, rendered system/prompt, params, and sample index) so unchanged suites re-run with no
   provider calls. Corrupt entries self-heal as a miss.
 - `evalkit cache clear` with an optional `--older-than` age filter (`s`, `m`, `h`, `d`, `w`).
-- `evalkit baseline`: stores a known-good snapshot (statuses, sample ratios, cost, latency — no
+- `evalkit baseline`: stores a known-good snapshot (statuses, sample ratios, cost, latency - no
   response text) and refuses to store a failing run; `--allow-failures` records a failing baseline so
   a later fix shows up as `fixed`. `evalkit run` diffs against the baseline when present.
 - Cost accounting from a per-model price table, with `--fail-on-cost` to exit `1` over budget and

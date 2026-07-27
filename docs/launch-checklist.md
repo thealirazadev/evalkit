@@ -1,4 +1,4 @@
-# Launch checklist — evalkit
+# Launch checklist - evalkit
 
 Work top to bottom before the first public release. Leave items unchecked until genuinely done.
 

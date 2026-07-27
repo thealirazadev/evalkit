@@ -8,8 +8,8 @@ evalkit is a command-line tool for prompt regression testing. You keep YAML suit
 each one a prompt template plus test cases with variables and assertions — and `evalkit run` renders
 every case, calls the configured LLM provider API, checks the assertions, and reports pass/fail with
 per-case cost and latency. Responses are cached on disk so re-runs are cheap and deterministic. A
-stored baseline lets later runs diff against a known-good state, and exit codes plus JSON/JUnit
-reports make it drop into CI without ceremony.
+stored baseline lets later runs diff against a known-good state, and exit codes plus JSON, JUnit,
+and HTML reports make it drop into CI without ceremony.
 
 ## Stack
 
@@ -51,6 +51,7 @@ evalkit run                          # discover suites via the config glob (eval
 evalkit run evals/support-bot.yaml   # or pass files/directories explicitly
 evalkit run -k refund                # only cases whose suite/case key contains "refund"
 evalkit run --json out.json --junit out.xml
+evalkit run --html report.html       # self-contained HTML summary (open in a browser)
 evalkit run --fail-on-cost 0.50      # exit 1 if the run costs more than $0.50
 ```
 
@@ -250,6 +251,13 @@ response (first 300 chars):
   </testsuite>
 </testsuites>
 ```
+
+`--html` writes the same run as a single self-contained HTML file: inline CSS, no external requests,
+so it opens in any browser offline and travels as a CI artifact. It shows overall pass/fail, every
+case's status with its assertion or judge reasons and a response excerpt, the cost, token, and cache
+totals, and the model and suite metadata. Every value is escaped, so control characters or markup in
+a model response cannot break or inject into the document. See
+[`examples/demo-report.html`](examples/demo-report.html) for the file this demo produces.
 
 ## Suite format
 

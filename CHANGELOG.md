@@ -52,5 +52,7 @@ feature set on `main`.
   instead of crashing the case with an unexpected error.
 - Suite `params` may no longer set `model` or `messages`. They used to override the request body
   silently while the cache key and cost accounting still used the suite's model.
+- An assertion whose `type` is a list or mapping is reported as an invalid suite (exit `2`) instead
+  of an unexpected error (exit `1`).
 
 [Unreleased]: https://github.com/thealirazadev/evalkit/commits/main

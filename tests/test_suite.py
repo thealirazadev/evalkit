@@ -54,6 +54,15 @@ def test_bad_yaml(tmp_path):
     assert exc.value.exit_code == 2
 
 
+@pytest.mark.parametrize("bad_type", ["[contains]", "{name: contains}"])
+def test_non_string_assertion_type_is_suite_error(tmp_path, bad_type):
+    text = VALID.replace("type: contains", f"type: {bad_type}")
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert "unknown assertion type" in exc.value.message
+    assert exc.value.exit_code == 2
+
+
 @pytest.mark.parametrize("key", ["model", "messages"])
 def test_params_cannot_override_request_fields(tmp_path, key):
     text = VALID.replace("cases:", f"params:\n  {key}: other\ncases:")

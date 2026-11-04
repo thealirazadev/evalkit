@@ -153,7 +153,9 @@ def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
     if not isinstance(raw, Mapping) or "type" not in raw:
         raise SuiteError(f"Invalid suite {file}: {where}: each assertion needs a 'type'")
     atype = raw["type"]
-    if atype not in KNOWN_ASSERTIONS:
+    # Check the type before the set lookup: an unhashable value (a YAML list or map) would
+    # otherwise raise TypeError and surface as an unexpected error instead of exit 2.
+    if not isinstance(atype, str) or atype not in KNOWN_ASSERTIONS:
         raise SuiteError(f'Invalid suite {file}: {where}: unknown assertion type "{atype}"')
 
     if atype in ("contains", "not_contains", "equals"):

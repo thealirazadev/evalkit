@@ -250,6 +250,13 @@ def test_meets_threshold_rounding():
     assert _meets_threshold(1, 3, 0.67) is False
 
 
+def test_meets_threshold_one_requires_every_sample():
+    # Rounding 399/400 = 0.9975 gives 1.0, but a 1.0 threshold means no sample may fail.
+    assert _meets_threshold(399, 400, 1.0) is False
+    assert _meets_threshold(200, 201, 1.0) is False
+    assert _meets_threshold(400, 400, 1.0) is True
+
+
 def test_nsample_threshold_pass(tmp_path, transport_factory):
     # 2 of 3 samples pass, threshold 0.67 -> case passes with ratio 2/3.
     def handler(req, n):

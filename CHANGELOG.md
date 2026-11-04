@@ -54,5 +54,7 @@ feature set on `main`.
   silently while the cache key and cost accounting still used the suite's model.
 - An assertion whose `type` is a list or mapping is reported as an invalid suite (exit `2`) instead
   of an unexpected error (exit `1`).
+- The default `threshold: 1.0` now always requires every sample to pass. With more than 200
+  samples, one failure used to round up to a passing ratio of 1.00.
 
 [Unreleased]: https://github.com/thealirazadev/evalkit/commits/main

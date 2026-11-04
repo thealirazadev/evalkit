@@ -282,7 +282,12 @@ def _meets_threshold(passed: int, samples: int, threshold: float) -> bool:
     by its intended ratio (2/3 = 0.6667 rounds to 0.67, meeting ``threshold: 0.67``). The
     threshold itself is compared unrounded: rounding it too would let a stricter bar like
     0.674 be met by 0.6667 (both round to 0.67), a false pass.
+
+    A threshold of 1.0 means every sample must pass. Rounding alone would let a large run
+    with one failure meet it (399/400 = 0.9975 rounds to 1.0), so it is checked exactly.
     """
+    if threshold >= 1.0:
+        return passed == samples
     return round(passed / samples, 2) >= threshold
 
 

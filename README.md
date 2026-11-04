@@ -332,6 +332,7 @@ The trade-offs that shaped evalkit, and the alternatives they were chosen over.
   assert on a stochastic output. The measured pass ratio is rounded to two decimals so a threshold
   written to two decimals is met by its intended ratio (2/3 = 0.6667 satisfies `threshold: 0.67`),
   while the threshold itself is compared unrounded so a stricter bar is never met by a lower ratio.
+  The default `threshold: 1.0` is checked exactly: every sample must pass, however many there are.
   Rejected: asserting on one sample (flaky) and hiding the ratio (the report always shows `2/3`).
 
 - **Judge assertions are quarantined from deterministic ones.** Every assertion except `judge` is

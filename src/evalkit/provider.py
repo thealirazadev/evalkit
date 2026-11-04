@@ -8,6 +8,7 @@ set once as a Bearer header on the client and is never logged.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -92,9 +93,13 @@ def _retry_after(resp: httpx.Response) -> float | None:
     if raw is None:
         return None
     try:
-        return max(0.0, float(raw))
+        seconds = float(raw)
     except ValueError:
         return None
+    # "inf" or "nan" parse as floats but are not usable delays (sleep(inf) raises).
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
 
 
 def _backoff(attempt: int, retry_after: float | None) -> float:

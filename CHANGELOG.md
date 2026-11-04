@@ -48,5 +48,7 @@ feature set on `main`.
 
 - Judge cost now includes the unparseable first attempt when the judge is retried, and a judge
   that never returns a parseable verdict still counts the attempts it made.
+- A non-finite `Retry-After` header (such as `inf`) falls back to the normal exponential backoff
+  instead of crashing the case with an unexpected error.
 
 [Unreleased]: https://github.com/thealirazadev/evalkit/commits/main

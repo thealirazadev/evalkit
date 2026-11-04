@@ -1,6 +1,7 @@
 """Provider HTTP layer: request shape, usage capture, retries, and error mapping."""
 
 import json
+import math
 
 import httpx
 import pytest
@@ -112,6 +113,20 @@ def test_retry_after_header_honored(transport_factory):
     client, rec = _client(transport_factory, handler)
     complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=delays.append)
     assert delays == [7.0]
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan", "1e400"])
+def test_non_finite_retry_after_falls_back_to_backoff(transport_factory, value):
+    delays = []
+
+    def handler(req, n):
+        return httpx.Response(429, headers={"Retry-After": value}) if n < 2 else chat_response("ok")
+
+    client, rec = _client(transport_factory, handler)
+    resp = complete_chat(client, "m", [{"role": "user", "content": "hi"}], {}, sleep=delays.append)
+    assert resp.text == "ok"
+    assert len(delays) == 1
+    assert math.isfinite(delays[0])
 
 
 def test_non_retryable_client_error(transport_factory):

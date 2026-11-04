@@ -44,4 +44,9 @@ feature set on `main`.
 - Exit-code contract for CI: `0` all passed, `1` failures or over-budget, `2` config/suite/provider
   errors, `130` on Ctrl-C, with `2` beating `1` beating `0`.
 
+### Fixed
+
+- Judge cost now includes the unparseable first attempt when the judge is retried, and a judge
+  that never returns a parseable verdict still counts the attempts it made.
+
 [Unreleased]: https://github.com/thealirazadev/evalkit/commits/main

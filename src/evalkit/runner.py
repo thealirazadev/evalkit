@@ -145,6 +145,8 @@ def _judge_call(
 ) -> tuple[object, float | None, bool]:
     """Return (Verdict, cost, cached). Retry once with a JSON-only nudge; then raise JudgeError.
 
+    ``cost`` covers every attempt made, including an unparseable one that was retried.
+
     The judge call is cached with the same mechanism as the case call. The key embeds the
     base (non-retry) judge prompt, which already contains the response and rubric, so the
     key changes whenever either does.
@@ -161,10 +163,13 @@ def _judge_call(
             )
             return verdict, cost, True
 
+    # Every attempt is a billed call, so the unparseable first attempt counts too.
+    spent: float | None = 0.0
     for attempt in range(2):
         messages = build_judge_messages(assertion.rubric or "", response_text, retry=attempt == 1)
         resp = complete_chat(client, judge_model, messages, JUDGE_PARAMS)
         cost = case_cost(config.pricing, judge_model, resp.prompt_tokens, resp.completion_tokens)
+        spent = None if spent is None or cost is None else spent + cost
         verdict = parse_verdict(resp.text)
         if verdict is not None:
             write_cache(
@@ -179,8 +184,8 @@ def _judge_call(
                     judge_model,
                 ),
             )
-            return verdict, cost, False
-    raise JudgeError()
+            return verdict, spent, False
+    raise JudgeError(spent)
 
 
 @dataclass
@@ -212,7 +217,11 @@ def _evaluate(
                 verdict, cost, cached = _judge_call(
                     assertion, text, judge_model, config, client, cache_root, sample
                 )
-            except JudgeError:
+            except JudgeError as exc:
+                if exc.cost is None:
+                    judge_cost_known = False
+                else:
+                    judge_cost += exc.cost
                 return _Eval(
                     failures,
                     judge_cost,

@@ -153,3 +153,42 @@ def test_unparseable_verdict_is_error(tmp_path, transport_factory):
     assert "unparseable verdict" in case.error
     # One case call + two judge attempts (original + JSON-only retry).
     assert rec.call_count == 3
+
+
+def _flaky_judge_handler(first_body, second_body):
+    """Case calls answer normally; the first judge call returns ``first_body``, later ones
+    ``second_body``. Judge calls use distinct token counts so their cost is identifiable."""
+    judge_calls = {"n": 0}
+
+    def handler(req, n):
+        body = json.loads(req.content)
+        if body["model"] == "example-judge-1":
+            judge_calls["n"] += 1
+            text = first_body if judge_calls["n"] == 1 else second_body
+            return chat_response(text, prompt_tokens=1000, completion_tokens=100)
+        return chat_response('{"reply": "hi"}')
+
+    return handler
+
+
+# One judge call at 1000 in / 100 out with example-judge-1 pricing (0.5 / 1.5 per 1M).
+ONE_JUDGE_CALL_USD = 1000 / 1_000_000 * 0.5 + 100 / 1_000_000 * 1.5
+
+
+def test_judge_retry_counts_cost_of_both_attempts(tmp_path, transport_factory):
+    handler = _flaky_judge_handler("not json", '{"pass": true, "reason": "fine"}')
+    client, rec = _client(transport_factory, handler)
+    result = run_suites([_suite(tmp_path)], _config(), client, tmp_path / "cache")
+    case = result.suites[0].cases[0]
+    assert case.status == "pass"
+    assert rec.call_count == 3  # case call + unparseable judge + retried judge
+    assert abs(case.judge_cost_usd - 2 * ONE_JUDGE_CALL_USD) < 1e-12
+    assert abs(result.totals.judge_cost_usd - 2 * ONE_JUDGE_CALL_USD) < 1e-12
+
+
+def test_unparseable_verdict_error_still_counts_judge_cost(tmp_path, transport_factory):
+    client, _ = _client(transport_factory, _flaky_judge_handler("not json", "still not json"))
+    result = run_suites([_suite(tmp_path)], _config(), client, tmp_path / "cache")
+    case = result.suites[0].cases[0]
+    assert case.status == "error"
+    assert abs(case.judge_cost_usd - 2 * ONE_JUDGE_CALL_USD) < 1e-12

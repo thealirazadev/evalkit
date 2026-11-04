@@ -291,6 +291,10 @@ reason). The full mini-spec - templating rules, assertion fields, and N-sample s
 `samples` and `threshold` may also be declared at the suite level, where they become the default for
 every case; a case that sets its own value overrides the suite default.
 
+Suite `params` (for example `temperature` or `max_tokens`) are passed through to the provider
+request. They may not set `model` or `messages`, which evalkit fills in itself; use the suite
+`model` field and the prompt templates for those.
+
 `json_valid` and `json_schema` parse the response strictly by default. Add `extract_fenced: true` to
 either assertion to first pull the contents of a fenced code block (```` ```json ```` or a plain
 ```` ``` ````) out of the response before validating - useful when a model wraps its JSON in

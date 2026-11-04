@@ -54,6 +54,15 @@ def test_bad_yaml(tmp_path):
     assert exc.value.exit_code == 2
 
 
+@pytest.mark.parametrize("key", ["model", "messages"])
+def test_params_cannot_override_request_fields(tmp_path, key):
+    text = VALID.replace("cases:", f"params:\n  {key}: other\ncases:")
+    with pytest.raises(SuiteError) as exc:
+        load_suite(_write(tmp_path, text), cwd=tmp_path)
+    assert f"'params' must not set '{key}'" in exc.value.message
+    assert exc.value.exit_code == 2
+
+
 def test_unknown_assertion_type(tmp_path):
     text = VALID.replace("type: contains", "type: contain")
     with pytest.raises(SuiteError) as exc:

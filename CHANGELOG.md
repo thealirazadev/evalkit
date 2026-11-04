@@ -50,5 +50,7 @@ feature set on `main`.
   that never returns a parseable verdict still counts the attempts it made.
 - A non-finite `Retry-After` header (such as `inf`) falls back to the normal exponential backoff
   instead of crashing the case with an unexpected error.
+- Suite `params` may no longer set `model` or `messages`. They used to override the request body
+  silently while the cache key and cost accounting still used the suite's model.
 
 [Unreleased]: https://github.com/thealirazadev/evalkit/commits/main

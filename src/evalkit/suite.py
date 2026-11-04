@@ -38,6 +38,10 @@ VARIABLE_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 _SCALAR_TYPES = (str, int, float, bool)
 
+# Request fields evalkit sets itself. A suite param with one of these names would silently
+# replace it in the request body while the cache key and cost still used evalkit's value.
+RESERVED_PARAMS = frozenset({"model", "messages"})
+
 
 @dataclass(frozen=True)
 class Assertion:
@@ -289,6 +293,12 @@ def load_suite(path: Path, cwd: Path | None = None) -> Suite:
     params = data.get("params") or {}
     if not isinstance(params, Mapping):
         raise SuiteError(f"Invalid suite {file}: 'params' must be a mapping")
+    reserved = sorted(RESERVED_PARAMS.intersection(params))
+    if reserved:
+        raise SuiteError(
+            f"Invalid suite {file}: 'params' must not set '{reserved[0]}' "
+            "(use the suite 'model' field and prompt templates instead)"
+        )
 
     cases_raw = data.get("cases")
     if not isinstance(cases_raw, Sequence) or isinstance(cases_raw, str) or not cases_raw:

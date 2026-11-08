@@ -7,10 +7,12 @@ set once as a Bearer header on the client and is never logged.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -41,6 +43,7 @@ class ProviderResponse:
     prompt_tokens: int | None
     completion_tokens: int | None
     latency_ms: int
+    tool_calls: tuple[dict[str, Any], ...] = ()
 
 
 def build_client(
@@ -71,11 +74,15 @@ def _parse_success(resp: httpx.Response, latency_ms: int) -> ProviderResponse:
     except ValueError as exc:
         raise ProviderCallError("malformed provider response") from exc
     try:
-        text = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
+        message = data["choices"][0]["message"]
+        text = message.get("content")
+    except (KeyError, IndexError, TypeError, AttributeError) as exc:
         raise ProviderCallError("malformed provider response") from exc
+    # A reply that only calls tools has no text content.
+    text = "" if text is None else text
     if not isinstance(text, str):
         raise ProviderCallError("malformed provider response")
+    tool_calls = _parse_tool_calls(message.get("tool_calls"))
     usage = data.get("usage") or {}
     if not isinstance(usage, dict):
         usage = {}
@@ -84,7 +91,25 @@ def _parse_success(resp: httpx.Response, latency_ms: int) -> ProviderResponse:
         prompt_tokens=_int_or_none(usage.get("prompt_tokens")),
         completion_tokens=_int_or_none(usage.get("completion_tokens")),
         latency_ms=latency_ms,
+        tool_calls=tool_calls,
     )
+
+
+def _parse_tool_calls(raw: object) -> tuple[dict[str, Any], ...]:
+    """Normalize OpenAI-style tool calls to ``{"name", "arguments"}`` with parsed arguments."""
+    if not isinstance(raw, list):
+        return ()
+    calls = []
+    for item in raw:
+        function = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(function, dict) or not isinstance(function.get("name"), str):
+            raise ProviderCallError("malformed tool call in provider response")
+        try:
+            arguments = json.loads(function.get("arguments") or "{}")
+        except ValueError:
+            arguments = {"_unparsed": function.get("arguments")}
+        calls.append({"name": function["name"], "arguments": arguments})
+    return tuple(calls)
 
 
 def _retry_after(resp: httpx.Response) -> float | None:

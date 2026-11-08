@@ -15,8 +15,13 @@ concurrency:
 
 jobs:
   test:
-    name: lint, format, tests, build
-    runs-on: ubuntu-latest
+    name: lint, format, tests, build (${{ matrix.os }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12", "3.13"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -25,7 +30,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.11.28"
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
@@ -39,7 +44,7 @@ jobs:
         run: uv run black --check .
 
       # The provider is mocked with httpx.MockTransport, so no API key is required.
-      - name: Tests
+      - name: Tests (coverage gate 90 percent)
         run: uv run pytest
 
       - name: Build package

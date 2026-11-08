@@ -57,7 +57,8 @@ def _boundary(work: Callable[[], int]) -> int:
     try:
         return work()
     except EvalkitError as exc:
-        logger.debug("error detail: %s", exc.detail)
+        if exc.detail:
+            logger.debug("error detail: %s", exc.detail)
         _fail(f"Error: {exc.message}")
         return exc.exit_code
     except KeyboardInterrupt:

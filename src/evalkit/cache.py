@@ -13,7 +13,7 @@ import json
 import logging
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +70,7 @@ class CacheEntry:
     created_at: str
     model: str
     version: int = CACHE_VERSION
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _entry_path(cache_root: Path, key: str) -> Path:
@@ -97,6 +98,7 @@ def read_cache(cache_root: Path, key: str) -> CacheEntry | None:
             created_at=data.get("created_at", ""),
             model=data.get("model", ""),
             version=CACHE_VERSION,
+            tool_calls=data.get("tool_calls") or [],
         )
     except (OSError, ValueError, KeyError, TypeError) as exc:
         logger.debug("cache read treated as miss (corrupt) key=%s error=%s", key, exc)

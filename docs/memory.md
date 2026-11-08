@@ -257,3 +257,15 @@ and verified._
   them and were deliberately left out of this security pass.
 
 _Do not change `docs/PRD.md` or `docs/architecture.md` without flagging it here first._
+
+## Manual checklist run against a real model (2026-11-09)
+
+- Ran every manual item in phases 1, 3, and 4 against Claude Haiku 5.5 (case model) and Sonnet
+  5.5 (judge) through a local OpenAI-compatible shim that calls the Claude Code CLI; the shim
+  lived outside the repo. All 22 items behaved as specified (exit codes, cache replay, judge
+  reasons and cost breakout, 3/3 sampling, JSON/JUnit, cost gate, plain piped output, baseline
+  store/refuse/regress/new/corrupt). Real costs: about $0.03 for the whole pass.
+- Found and fixed two small gaps: `--verbose` had no line for judge calls, so the checklist item
+  "shows judge calls using it" could not be confirmed (added `event=judge model=... cache=...`),
+  and `--verbose` printed `error detail: None` for errors without detail (now skipped).
+- Not run: uploading `out.xml` to a CI system; the file was parsed and has per-case times.

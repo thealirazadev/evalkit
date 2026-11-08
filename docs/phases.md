@@ -46,16 +46,16 @@ Execution is serial in this phase.
 
 ### Manual test checklist
 
-- [ ] Write a two-case suite against a real provider endpoint; `evalkit run` prints case lines,
+- [x] Write a two-case suite against a real provider endpoint; `evalkit run` prints case lines,
       failure details for a deliberately failing `contains`, and the summary. Exit 1.
-- [ ] Fix the case; run again. Exit 0, and the second run says `cached` with 0 fresh calls.
-- [ ] `evalkit run --no-cache` re-calls the provider (fresh latency, cache overwritten).
-- [ ] Break the YAML (unknown assertion type); exit 2 with the file and case named.
-- [ ] Reference `{{typo}}` in the prompt; exit 2 naming the variable, no provider call.
-- [ ] Unset `EVALKIT_API_KEY`; exit 2 with the documented message; the key never prints.
-- [ ] Point `EVALKIT_BASE_URL` at a dead port; retries, then the case shows `error`, run exits 2.
-- [ ] Remove the model from `pricing`; cost shows `n/a` with a `Warning:`, run still completes.
-- [ ] `evalkit --version` and `evalkit run --help` work.
+- [x] Fix the case; run again. Exit 0, and the second run says `cached` with 0 fresh calls.
+- [x] `evalkit run --no-cache` re-calls the provider (fresh latency, cache overwritten).
+- [x] Break the YAML (unknown assertion type); exit 2 with the file and case named.
+- [x] Reference `{{typo}}` in the prompt; exit 2 naming the variable, no provider call.
+- [x] Unset `EVALKIT_API_KEY`; exit 2 with the documented message; the key never prints.
+- [x] Point `EVALKIT_BASE_URL` at a dead port; retries, then the case shows `error`, run exits 2.
+- [x] Remove the model from `pricing`; cost shows `n/a` with a `Warning:`, run still completes.
+- [x] `evalkit --version` and `evalkit run --help` work.
 
 ### Commits
 
@@ -103,17 +103,17 @@ plain and non-interactive off-TTY.
 
 ### Manual test checklist
 
-- [ ] Add a `judge` assertion with a rubric a real response violates; the case fails and the
+- [x] Add a `judge` assertion with a rubric a real response violates; the case fails and the
       judge's reason prints under it. Re-run: judge verdict comes from cache.
-- [ ] Set `judge.model` to a different model; `--verbose` shows judge calls using it, and the
+- [x] Set `judge.model` to a different model; `--verbose` shows judge calls using it, and the
       summary breaks out judge cost.
-- [ ] Give a case `samples: 3, threshold: 0.67` at `temperature: 0.9`; the report shows the
+- [x] Give a case `samples: 3, threshold: 0.67` at `temperature: 0.9`; the report shows the
       ratio; a cached re-run reproduces the identical outcome.
-- [ ] `evalkit run --json out.json --junit out.xml`; inspect both; upload `out.xml` to the CI
+- [x] `evalkit run --json out.json --junit out.xml`; inspect both; upload `out.xml` to the CI
       system (or a local JUnit viewer) and see per-case results with times.
-- [ ] `evalkit run --fail-on-cost 0.000001` exits 1 naming budget and actual.
-- [ ] Remove a model's pricing and pass `--fail-on-cost`; exit 2.
-- [ ] `evalkit run | cat` - plain output, no escape codes, no hang, correct exit code preserved.
+- [x] `evalkit run --fail-on-cost 0.000001` exits 1 naming budget and actual.
+- [x] Remove a model's pricing and pass `--fail-on-cost`; exit 2.
+- [x] `evalkit run | cat` - plain output, no escape codes, no hang, correct exit code preserved.
 
 ### Commits
 
@@ -147,13 +147,13 @@ cases and cost/latency deltas.
 
 ### Manual test checklist
 
-- [ ] On a passing run, `evalkit baseline` writes the file; inspect it: statuses, cost, latency,
+- [x] On a passing run, `evalkit baseline` writes the file; inspect it: statuses, cost, latency,
       no response text.
-- [ ] `evalkit baseline` with a failing case refuses, exit 1, file untouched.
-- [ ] Break a case's prompt; `evalkit run` lists it under regressions with deltas, exit 1.
-- [ ] Add a new case; the diff counts it under `new`.
-- [ ] Corrupt `baseline.json` by hand; exit 2 with the recreate message.
-- [ ] `--json` output includes the populated `baseline` object.
+- [x] `evalkit baseline` with a failing case refuses, exit 1, file untouched.
+- [x] Break a case's prompt; `evalkit run` lists it under regressions with deltas, exit 1.
+- [x] Add a new case; the diff counts it under `new`.
+- [x] Corrupt `baseline.json` by hand; exit 2 with the recreate message.
+- [x] `--json` output includes the populated `baseline` object.
 
 ### Commits
 

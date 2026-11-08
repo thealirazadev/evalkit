@@ -1,6 +1,7 @@
 """Judge verdict parsing, prompt build, model resolution, and runner integration."""
 
 import json
+import logging
 
 from conftest import chat_response
 
@@ -153,3 +154,17 @@ def test_unparseable_verdict_is_error(tmp_path, transport_factory):
     assert "unparseable verdict" in case.error
     # One case call + two judge attempts (original + JSON-only retry).
     assert rec.call_count == 3
+
+
+def test_verbose_log_names_the_judge_model(tmp_path, transport_factory, caplog, monkeypatch):
+    # configure_logging (run by CLI tests) stops propagation; caplog needs it here.
+    monkeypatch.setattr(logging.getLogger("evalkit"), "propagate", True)
+    client, _ = _client(transport_factory, _handler('{"pass": true, "reason": "fine"}'))
+    suite = _suite(tmp_path)
+    cache_root = tmp_path / "cache"
+    with caplog.at_level(logging.DEBUG, logger="evalkit"):
+        run_suites([suite], _config(), client, cache_root)
+        run_suites([suite], _config(), client, cache_root)
+    judge_lines = [r.getMessage() for r in caplog.records if "event=judge" in r.getMessage()]
+    assert "model=example-judge-1 cache=miss" in judge_lines[0]
+    assert "model=example-judge-1 cache=hit" in judge_lines[1]

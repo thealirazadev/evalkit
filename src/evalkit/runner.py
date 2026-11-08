@@ -160,6 +160,7 @@ def _judge_call(
             cost = case_cost(
                 config.pricing, judge_model, entry.prompt_tokens, entry.completion_tokens
             )
+            logger.debug("event=judge model=%s cache=hit cost_usd=%s", judge_model, cost)
             return verdict, cost, True
 
     for attempt in range(2):
@@ -167,6 +168,14 @@ def _judge_call(
         resp = complete_chat(client, judge_model, messages, JUDGE_PARAMS)
         cost = case_cost(config.pricing, judge_model, resp.prompt_tokens, resp.completion_tokens)
         verdict = parse_verdict(resp.text)
+        logger.debug(
+            "event=judge model=%s cache=miss attempt=%d latency_ms=%d valid=%s cost_usd=%s",
+            judge_model,
+            attempt + 1,
+            resp.latency_ms,
+            verdict is not None,
+            cost,
+        )
         if verdict is not None:
             write_cache(
                 cache_root,

@@ -20,6 +20,9 @@ feature set on `main`.
 - `judge` assertion: a separately configured judge model returns a pass/fail verdict with a reason;
   its cost is tracked separately, and an unparseable verdict (after one JSON-only retry) is an error,
   not a failure.
+- Tool-call assertions for testing agents: `tool_called`, `tool_not_called`, and `tool_args`
+  (recursive subset match on arguments). Tool calls are parsed from OpenAI-style responses and
+  stored in the cache alongside the response text.
 - Opt-in `extract_fenced` on `json_valid` / `json_schema` to pull JSON out of a Markdown code fence
   before validating; the strict default is unchanged.
 - N-sample execution with a pass `threshold`, and suite-level `samples` / `threshold` defaults that

@@ -284,12 +284,47 @@ cases:
 ```
 
 Assertion types: `contains`, `not_contains`, `regex`, `equals`, `json_valid`, `json_schema`,
-`max_length`, and `judge` (a separately configured judge model returns a pass/fail verdict with a
+`max_length`, `tool_called`, `tool_not_called`, `tool_args`, and `judge` (a separately configured judge model returns a pass/fail verdict with a
 reason). The full mini-spec - templating rules, assertion fields, and N-sample semantics - lives in
 [`docs/architecture.md`](docs/architecture.md).
 
 `samples` and `threshold` may also be declared at the suite level, where they become the default for
 every case; a case that sets its own value overrides the suite default.
+
+### Testing agents: tool-call assertions
+
+Put OpenAI-style tool definitions in the suite's `params` and evalkit sends them with every request.
+Three assertions then check what the model decided to do, not just what it said:
+
+- `tool_called` - the model called this tool at least once.
+- `tool_not_called` - the model never called this tool (use it for tools that must stay off limits,
+  such as refunds without approval).
+- `tool_args` - some call to this tool had arguments that contain `args` (a recursive subset match,
+  so extra arguments are fine).
+
+```yaml
+params:
+  tools:
+    - type: function
+      function:
+        name: search_orders
+        parameters: {type: object, properties: {email: {type: string}}, required: [email]}
+cases:
+  - name: looks-up-before-answering
+    vars: {message: "Where is my order? I'm sam@example.com"}
+    assert:
+      - type: tool_called
+        value: search_orders
+      - type: tool_args
+        value: search_orders
+        args: {email: sam@example.com}
+      - type: tool_not_called
+        value: issue_refund
+```
+
+A reply that only calls tools has empty text, so text assertions still run against `""`. Tool
+calls are stored in the cache with the response, so cached runs check the same calls.
+See [`examples/agent-tools.yaml`](examples/agent-tools.yaml).
 
 `json_valid` and `json_schema` parse the response strictly by default. Add `extract_fenced: true` to
 either assertion to first pull the contents of a fenced code block (```` ```json ```` or a plain

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from typing import Any
 
 import jsonschema
 
@@ -111,8 +112,51 @@ def _max_length(assertion: Assertion, response: str) -> AssertionResult:
     return False, f"max_length: response length {len(response)} exceeds {limit}"
 
 
-def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
-    """Evaluate one deterministic assertion against the response text."""
+ToolCalls = list[dict[str, Any]] | tuple[dict[str, Any], ...]
+
+
+def _calls_named(tool_calls: ToolCalls, name: str) -> list[dict[str, Any]]:
+    return [call for call in tool_calls if call.get("name") == name]
+
+
+def _called_names(tool_calls: ToolCalls) -> str:
+    return ", ".join(str(call.get("name")) for call in tool_calls) or "none"
+
+
+def _subset(expected: Any, actual: Any) -> bool:
+    """True when every key in ``expected`` is in ``actual`` with a matching value (recursively)."""
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(
+            key in actual and _subset(value, actual[key]) for key, value in expected.items()
+        )
+    return bool(expected == actual)
+
+
+def _evaluate_tool_assertion(assertion: Assertion, tool_calls: ToolCalls) -> AssertionResult:
+    name = str(assertion.value)
+    matches = _calls_named(tool_calls, name)
+    if assertion.type == "tool_called":
+        if matches:
+            return True, None
+        return False, f"expected a call to {name}, called: {_called_names(tool_calls)}"
+    if assertion.type == "tool_not_called":
+        if not matches:
+            return True, None
+        return False, f"{name} must not be called, but was called {len(matches)} time(s)"
+    if any(_subset(assertion.args, call.get("arguments")) for call in matches):
+        return True, None
+    if not matches:
+        return False, f"expected a call to {name}, called: {_called_names(tool_calls)}"
+    seen = json.dumps(matches[0].get("arguments"), sort_keys=True)[:120]
+    return False, f"{name} was called without arguments matching {assertion.args}; got {seen}"
+
+
+def evaluate_assertion(
+    assertion: Assertion, response: str, tool_calls: ToolCalls = ()
+) -> AssertionResult:
+    """Evaluate one deterministic assertion against the response text and tool calls."""
+    if assertion.type.startswith("tool_"):
+        return _evaluate_tool_assertion(assertion, tool_calls)
     handler = _HANDLERS.get(assertion.type)
     if handler is None:
         raise ValueError(f"no deterministic handler for assertion type {assertion.type!r}")

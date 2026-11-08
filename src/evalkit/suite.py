@@ -30,6 +30,9 @@ KNOWN_ASSERTIONS = frozenset(
         "json_schema",
         "max_length",
         "judge",
+        "tool_called",
+        "tool_not_called",
+        "tool_args",
     }
 )
 
@@ -50,6 +53,7 @@ class Assertion:
     schema: dict[str, Any] | None = None
     rubric: str | None = None
     extract_fenced: bool = False
+    args: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -201,6 +205,17 @@ def _parse_assertion(raw: Any, file: str, case_name: str) -> Assertion:
                 f"Invalid suite {file}: {where}: max_length 'value' must be a non-negative integer"
             )
         return Assertion(type=atype, value=value)
+
+    if atype in ("tool_called", "tool_not_called", "tool_args"):
+        name = raw.get("value")
+        if not isinstance(name, str) or not name.strip():
+            raise SuiteError(f"Invalid suite {file}: {where}: {atype} 'value' must be a tool name")
+        if atype != "tool_args":
+            return Assertion(type=atype, value=name)
+        args = raw.get("args")
+        if not isinstance(args, Mapping) or not args:
+            raise SuiteError(f"Invalid suite {file}: {where}: tool_args requires an 'args' map")
+        return Assertion(type=atype, value=name, args=dict(args))
 
     # judge
     rubric = raw.get("rubric")

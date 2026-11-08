@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -196,7 +197,13 @@ class _Eval:
 
 
 def _evaluate(
-    case: Case, text: str, config: Config, client: httpx.Client, cache_root: Path, sample: int
+    case: Case,
+    text: str,
+    config: Config,
+    client: httpx.Client,
+    cache_root: Path,
+    sample: int,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> _Eval:
     """Evaluate all assertions for one sample. A non-None ``error`` means the case is an error."""
     failures: list[Failure] = []
@@ -238,7 +245,7 @@ def _evaluate(
             if not verdict.passed:
                 failures.append(Failure("judge", f"judge: {verdict.reason}", sample=label))
         else:
-            passed, message = evaluate_assertion(assertion, text)
+            passed, message = evaluate_assertion(assertion, text, tool_calls or [])
             if not passed:
                 failures.append(Failure(assertion.type, message, sample=label))
     return _Eval(failures, judge_cost, judge_cost_known, judge_model, judge_cached, None)
@@ -299,6 +306,7 @@ def _run_sample(
     entry = read_cache(cache_root, key) if config.cache else None
     if entry is not None:
         text = entry.response_text
+        tool_calls = entry.tool_calls
         prompt_tokens, completion_tokens, latency_ms = (
             entry.prompt_tokens,
             entry.completion_tokens,
@@ -312,6 +320,7 @@ def _run_sample(
             return _Sample(
                 False, [], False, 0, None, None, None, 0.0, True, None, f"provider: {exc.reason}"
             )
+        tool_calls = list(resp.tool_calls)
         text, prompt_tokens, completion_tokens, latency_ms = (
             resp.text,
             resp.prompt_tokens,
@@ -322,10 +331,18 @@ def _run_sample(
         write_cache(
             cache_root,
             key,
-            CacheEntry(text, prompt_tokens, completion_tokens, latency_ms, _now_iso(), model),
+            CacheEntry(
+                text,
+                prompt_tokens,
+                completion_tokens,
+                latency_ms,
+                _now_iso(),
+                model,
+                tool_calls=tool_calls,
+            ),
         )
 
-    ev = _evaluate(case, text, config, client, cache_root, sample)
+    ev = _evaluate(case, text, config, client, cache_root, sample, tool_calls)
     cost = case_cost(config.pricing, model, prompt_tokens, completion_tokens)
     logger.debug(
         "event=sample suite=%s case=%s sample=%d cache=%s latency_ms=%d "

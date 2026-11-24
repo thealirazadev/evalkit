@@ -344,7 +344,8 @@ Markdown. The default (no flag) is unchanged and still requires the whole respon
 
 ## Design decisions
 
-The trade-offs that shaped evalkit, and the alternatives they were chosen over.
+The trade-offs that shaped evalkit, and the alternatives they were chosen over. The full list, with
+the reasoning behind each, is in [`docs/decisions.md`](docs/decisions.md).
 
 - **Caching makes a non-deterministic system reproducible.** An LLM endpoint is not a pure
   function, yet a regression test has to be stable and cheap to re-run in CI. Responses are cached

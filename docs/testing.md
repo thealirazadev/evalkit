@@ -50,11 +50,31 @@ Fixtures in `conftest.py`: a factory for mock providers with scripted responses 
 sequences for retry tests), a temp working dir with `.evalkit/` isolation, sample suites and a
 pricing config under `tests/fixtures/`.
 
-### Manual QA
+### Manual checks against a live provider
 
-The checklists in `docs/phases.md`. They cover what mocks cannot: a real provider endpoint, real
-latency and cost numbers, TTY progress and color, CI ingestion of the JUnit file, and Ctrl-C
-behavior. Manual QA is required before a phase is done but is not part of the automated suite.
+Some behavior cannot be exercised with a mock: a real endpoint, real latency and cost numbers, TTY
+progress and color, Ctrl-C, and CI ingestion of the JUnit file. These are checked by hand against a
+real endpoint and are not part of the automated suite:
+
+- A suite with a deliberately failing `contains` exits 1 with failure details; once fixed it exits
+  0, and a second run reports `cached` with no fresh calls. `--no-cache` calls the provider again.
+- An unknown assertion type or an undefined `{{variable}}` exits 2 naming the file and case, with
+  no provider call. An unset `EVALKIT_API_KEY` exits 2 and the key never prints. A dead base URL
+  retries, marks the case `error`, and exits 2.
+- A model missing from `pricing` shows `n/a` cost with a `Warning:`; with `--fail-on-cost` it exits
+  2. A tiny `--fail-on-cost` budget exits 1 naming the budget and the actual cost.
+- A `judge` rubric that a real response violates fails the case with the judge's reason, and a
+  re-run takes the verdict from the cache. A separate `judge.model` shows up in `--verbose` logs and
+  in the judge cost line.
+- `samples: 3, threshold: 0.67` at a high temperature shows the ratio, and a cached re-run
+  reproduces it.
+- `--json` and `--junit` files are well formed, and the JUnit file shows per-case results and times
+  in a JUnit viewer. `evalkit run | cat` prints plain output with no escape codes.
+- `evalkit baseline` stores a snapshot with no response text, refuses a failing run, and a later
+  regression, new case, or corrupted snapshot is reported as documented.
+- At `--concurrency 4` a suite of slow cases finishes faster than at `--concurrency 1`; `-k` filters
+  cases and a pattern with no match exits 2; Ctrl-C prints `Aborted.` and exits 130 without
+  corrupting the cache; the progress line appears on a TTY and never when piped.
 
 ## Exact commands
 
@@ -75,12 +95,11 @@ evalkit --version              # entry point works after install
 
 ## Gate
 
-Build and tests must pass before a feature is reported done. For every commit:
+Every commit keeps the build green:
 
-1. `uv run pytest` passes - mocked provider, zero network.
+1. `uv run pytest` passes, with the provider mocked and zero network access.
 2. `uv run ruff check .` passes.
 3. `uv run black --check .` passes.
-4. The package still installs and `evalkit --version` runs.
+4. The package still builds and `evalkit --version` runs.
 
-Fix all errors before reporting done. Do not commit red tests or a broken build. Tests for a
-feature land in the same commit as the feature.
+Tests for a feature land in the same commit as the feature.

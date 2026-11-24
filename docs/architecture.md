@@ -260,7 +260,7 @@ JSON-only nudge; if still unparseable, the case is an `error` (infrastructure pr
 - Invalidation is purely key-based; there is no TTL. Clearing the cache is `rm -rf .evalkit/cache`
   - no subcommand for it in v1.
 - The cache stores provider responses in plaintext; `.evalkit/cache/` is gitignored and must stay
-  that way (see `docs/rules.md` - Security).
+  that way (see Security in `CONTRIBUTING.md`).
 
 ## Baseline snapshot
 

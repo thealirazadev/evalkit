@@ -14,8 +14,7 @@ feature set on `main`.
 
 - `--verbose` logs each judge call with its model, cache state, and cost (`event=judge`).
 - CI on Linux, macOS, and Windows with Python 3.12 and 3.13; coverage gate at 90 percent.
-- The full manual checklist was run against a real model (Claude Haiku, Sonnet as judge); see
-  `docs/memory.md`.
+- The full manual checklist was run against a real model (Claude Haiku, Sonnet as judge).
 
 ### Fixed
 

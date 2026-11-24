@@ -118,7 +118,7 @@ Rules:
 - **`--quiet`:** failed and errored case lines with details, baseline regressions, and the
   summary. Passing case lines and progress are suppressed. Logging at ERROR.
 - **`--verbose`:** default output plus structured key=value logs on stderr per case (see
-  `docs/rules.md` - Logging): cache hit/miss, HTTP status, attempt count, latency, tokens, cost.
+  Logging in `CONTRIBUTING.md`): cache hit/miss, HTTP status, attempt count, latency, tokens, cost.
   Never the API key; prompt/response excerpts truncated to 200 chars at debug only.
 
 ## Error message style
@@ -140,8 +140,33 @@ Rules:
 | 2    | Config, usage, suite-validation, or provider error - including auth failure, any errored case, unenforceable `--fail-on-cost`, and click usage errors. |
 | 130  | Aborted with Ctrl-C.                                                       |
 
-Precedence: 2 beats 1 beats 0. These are the single source of truth and must match
-`docs/rules.md`; CI gates on them, so changing any mapping is a breaking change.
+Precedence: 2 beats 1 beats 0. CI gates on these codes, so changing any mapping is a breaking
+change.
+
+### Failure classes
+
+Each problem produces one line and a fixed exit code.
+
+| Situation                         | Detect                                    | User-facing message (one line)                                          | Exit |
+| --------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- | ---- |
+| Bad CLI flags                     | click usage error                         | click's own usage message                                               | 2    |
+| Config file unreadable/invalid    | YAML error / schema check in `config.py`  | `Invalid config <path>: <reason>`                                       | 2    |
+| No suites found                   | empty discovery result                    | `No suite files found. Pass paths or set 'suites' in evalkit.yaml.`     | 2    |
+| Suite invalid                     | validation in `suite.py`                  | `Invalid suite <file>: <reason>` (names the case where relevant)        | 2    |
+| Undefined template variable       | render step                               | `Suite <file>, case <name>: undefined variable {{x}}`                   | 2    |
+| API key missing/invalid           | key unset before first call, or 401/403   | `API key missing or invalid. Set EVALKIT_API_KEY.`                      | 2    |
+| Provider unreachable / persistent 429/5xx | retries exhausted in `provider.py` | case marked `error: <reason>`; summary explains                        | 2    |
+| Malformed provider response       | missing `choices[0].message.content`      | case marked `error: malformed provider response`                        | 2    |
+| Unparseable judge verdict         | after one JSON-only retry                 | case marked `error: judge returned an unparseable verdict`              | 2    |
+| Assertion failure(s)              | `assertions.py` / `judge.py`              | per-case failure lines in the report                                    | 1    |
+| Cost budget exceeded              | total > `--fail-on-cost`                  | `Cost budget exceeded: $<actual> > $<budget>`                           | 1    |
+| Budget set but pricing missing    | model absent from price table             | `Cannot enforce --fail-on-cost: no pricing for model <id>`              | 2    |
+| Baseline refused (failures)       | `evalkit baseline` with failing cases     | `Baseline not stored: <n> case(s) failing.`                             | 1    |
+| Corrupt cache entry               | JSON/read error in `cache.py`             | treat as a miss, log at debug, refetch - never crash the run            | n/a  |
+| Corrupt baseline file             | JSON/version error in `baseline.py`       | `Baseline <path> is unreadable; run 'evalkit baseline' to recreate.`    | 2    |
+| Report file unwritable            | I/O error on a `--json`/`--junit`/`--html` path | `Cannot write report <path>: <reason>`                                  | 2    |
+| Ctrl-C                            | `KeyboardInterrupt` at top level          | `Aborted.`                                                              | 130  |
+| Any other unexpected error        | uncaught in inner code                    | `Unexpected error. Re-run with --verbose for details.`                  | 1    |
 
 ## Accessibility
 

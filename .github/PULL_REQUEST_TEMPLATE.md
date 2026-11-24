@@ -22,7 +22,8 @@ What this change does and why. Link any related issue (`Closes #123`).
 - [ ] No new dependency (or it was discussed first, and `pyproject.toml` + `uv.lock` change together
       in their own commit).
 - [ ] Docs updated where behavior changed: `README.md` and a `CHANGELOG.md` entry under
-      `Unreleased`. Any change to `docs/PRD.md` or `docs/architecture.md` is flagged, not silent.
+      `Unreleased`. A changed format or design decision is reflected in `docs/architecture.md` or
+      `docs/decisions.md`.
 - [ ] No API key, real prompt data, or vendor/model name added to code, output, or docs.
 
 ## Notes for reviewers

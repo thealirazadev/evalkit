@@ -178,7 +178,7 @@ case must pass for the sample to pass. Order in the file is the order of evaluat
 | `not_contains`| `value`   | `value` does not occur in the response                                  |
 | `regex`       | `pattern` | `re.search(pattern, response)` matches (Python syntax; invalid pattern is a load-time error) |
 | `equals`      | `value`   | the response, stripped of leading/trailing whitespace, equals `value` exactly |
-| `json_valid`  | -         | the stripped response parses with `json.loads` (no code-fence extraction in v1) |
+| `json_valid`  | -         | the stripped response parses with `json.loads` (set `extract_fenced: true` to parse the first fenced code block instead) |
 | `json_schema` | `schema`  | response parses as JSON and validates against the inline schema (implies `json_valid`) |
 | `max_length`  | `value`   | `len(response) <= value` (characters)                                   |
 | `judge`       | `rubric`  | the judge model returns `pass: true` for the response against the rubric |
@@ -252,13 +252,13 @@ JSON-only nudge; if still unparseable, the case is an `error` (infrastructure pr
 - Entry contents: `{version: 1, response_text, prompt_tokens, completion_tokens, latency_ms,
   created_at, model}`.
 - Read path: on a hit, the stored response is used with zero provider calls; the case is marked
-  `cached`, contributes $0 to run spend, and reuses the stored latency for baseline comparison
-  display only.
+  `cached`, still carries its modeled cost (see `docs/decisions.md`), and reuses the stored
+  latency for baseline comparison display only.
 - `--no-cache` skips reads but still writes, so the next run benefits from fresh entries.
 - Judge calls are cached with the same mechanism (the judge prompt embeds the response and rubric,
   so the key changes whenever either does).
-- Invalidation is purely key-based; there is no TTL. Clearing the cache is `rm -rf .evalkit/cache`
-  - no subcommand for it in v1.
+- Invalidation is purely key-based; there is no TTL. `evalkit cache clear` removes entries, and
+  `--older-than <duration>` removes only entries older than that age.
 - The cache stores provider responses in plaintext; `.evalkit/cache/` is gitignored and must stay
   that way (see Security in `CONTRIBUTING.md`).
 
@@ -292,7 +292,8 @@ failure.
 
 ## Reports
 
-Terminal output is specified in `docs/design.md`. The two file reporters:
+Terminal output is specified in `docs/design.md`. The JSON and JUnit file reporters are below;
+`--html PATH` also writes a self-contained HTML report (see `docs/decisions.md`).
 
 ### JSON report (`--json PATH`)
 
@@ -371,8 +372,8 @@ yields `n/a` cost for its cases, a warning, `cost_known: false` in the JSON repo
 
 ## Where state lives
 
-- **In memory:** the resolved `Config`, loaded suites, and the run result tree that all three
-  reporters consume.
+- **In memory:** the resolved `Config`, loaded suites, and the run result tree that all four
+  reporters (terminal, JSON, JUnit, HTML) consume.
 - **Disk, gitignored:** `.evalkit/cache/` (response cache) and `.env` (local secrets).
 - **Disk, committable:** `.evalkit/baseline.json`, suite files under `evals/`, `evalkit.yaml`,
   and any `--json` / `--junit` report files (typically CI artifacts, not committed).

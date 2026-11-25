@@ -3,6 +3,7 @@
 import json
 import logging
 
+import pytest
 from conftest import chat_response
 
 from evalkit.config import Config, load_config
@@ -154,6 +155,50 @@ def test_unparseable_verdict_is_error(tmp_path, transport_factory):
     assert "unparseable verdict" in case.error
     # One case call + two judge attempts (original + JSON-only retry).
     assert rec.call_count == 3
+
+
+# Per judge attempt at the default 10 prompt / 5 completion tokens and the judge price above.
+ONE_JUDGE_ATTEMPT_USD = 10 / 1_000_000 * 0.5 + 5 / 1_000_000 * 1.5
+
+
+def _judge_retry_handler(*judge_replies):
+    """Case calls answer normally; judge calls answer with each reply in turn."""
+    judge_calls = []
+
+    def handler(req, n):
+        body = json.loads(req.content)
+        if body["model"] == "example-judge-1":
+            judge_calls.append(n)
+            return chat_response(judge_replies[min(len(judge_calls), len(judge_replies)) - 1])
+        return chat_response('{"reply": "hi"}')
+
+    return handler
+
+
+def test_a_judge_retry_counts_both_attempts_cost(tmp_path, transport_factory):
+    client, rec = _client(
+        transport_factory, _judge_retry_handler("not json", '{"pass": true, "reason": "fine"}')
+    )
+    suite = _suite(tmp_path)
+    cache_root = tmp_path / "cache"
+
+    fresh = run_suites([suite], _config(), client, cache_root)
+    replay = run_suites([suite], _config(), client, cache_root)
+
+    assert rec.call_count == 3  # one case call + two judge attempts, then all from cache
+    assert fresh.suites[0].cases[0].status == "pass"
+    assert fresh.totals.judge_cost_usd == pytest.approx(2 * ONE_JUDGE_ATTEMPT_USD)
+    # The cached replay models the same spend as the fresh run, not just the last attempt.
+    assert replay.totals.judge_cost_usd == pytest.approx(fresh.totals.judge_cost_usd)
+
+
+def test_an_unparseable_verdict_still_reports_the_judge_spend(tmp_path, transport_factory):
+    client, _ = _client(transport_factory, _handler("not json at all"))
+    result = run_suites([_suite(tmp_path)], _config(), client, tmp_path / "cache")
+
+    case = result.suites[0].cases[0]
+    assert case.status == "error"
+    assert case.judge_cost_usd == pytest.approx(2 * ONE_JUDGE_ATTEMPT_USD)
 
 
 def test_verbose_log_names_the_judge_model(tmp_path, transport_factory, caplog, monkeypatch):

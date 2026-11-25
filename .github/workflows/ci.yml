@@ -17,6 +17,7 @@ jobs:
   test:
     name: lint, format, tests, build (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

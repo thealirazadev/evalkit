@@ -33,3 +33,8 @@ def test_missing_usage_returns_none():
 def test_has_pricing():
     assert has_pricing(PRICING, "example-model-1") is True
     assert has_pricing(PRICING, "nope") is False
+
+
+def test_zero_usage_costs_zero_not_none():
+    # Zero tokens is known usage, so it prices to 0.0 rather than marking the cost partial.
+    assert case_cost(PRICING, "example-judge-1", 0, 0) == 0.0

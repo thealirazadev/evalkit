@@ -43,8 +43,55 @@ reaches a real endpoint or requires an API key. New provider behavior is tested 
   `judge.py` (LLM-as-judge), `cache.py`, `cost.py`, `runner.py` (execution + aggregation), the
   `report_*.py` writers, and `cli.py` (the click entry point and the single error boundary).
 - `tests/` - one test module per source module; `tests/` is intentionally not a package.
-- `docs/` - `PRD.md` and `architecture.md` are the source of truth; `rules.md` binds contributors.
+- `docs/` - `architecture.md` (suite format, request shape, cache, baseline, and report schemas)
+  and `decisions.md` (the design decisions and their reasons) are the reference for how evalkit
+  works; `design.md` covers terminal output and exit codes, `testing.md` the test strategy.
 - `examples/` and `evals/` - runnable example suites.
+
+## Code conventions
+
+- **One CLI layer.** `click` with `CliRunner` in tests. All user-facing output goes through the
+  single `rich.Console` created at startup and passed down; no bare `print()`. Machine-readable
+  output (`--json`, `--junit`, `--html`) goes to files, never interleaved with terminal output.
+- **Config once.** Configuration resolves once at startup (defaults, then `evalkit.yaml`, then
+  env, then flags) into a frozen `Config`. Do not read environment variables elsewhere, and do not
+  add global mutable state; pass `Config` and `Console` explicitly.
+- **Network only in `provider.py`.** `httpx` is the only HTTP client. No provider SDKs.
+- **No subprocesses and no prompts.** No `shell=True`, `os.system`, or subprocess calls, and no
+  interactive prompt on any path; every decision comes from flags or config.
+- **Errors.** Raise the typed exceptions in `errors.py`; only `cli.py` catches them. Users see one
+  line per problem, extra detail goes behind `--verbose`, and raw tracebacks never print by default.
+  The failure messages and exit codes are listed in `docs/design.md`.
+- **Versioned files.** The cache entry and baseline formats carry a `version` field. When a format
+  changes, bump the version and reject or migrate old files; never misread them silently.
+- **Keep it small.** Prefer a function over a class and the standard library where it suffices
+  (`hashlib`, `xml.etree`, `concurrent.futures`, `glob`). No abstraction (provider adapters,
+  reporter base classes, assertion plugin registries) before three real use cases.
+- **Naming.** `snake_case` verb-first functions (`load_suite`, `render_template`), `PascalCase`
+  classes, `UPPER_SNAKE_CASE` constants. Cases are identified as `suite/case` everywhere: baseline,
+  diff output, `-k` matching, and reports.
+
+### Logging
+
+- Stdlib `logging`, configured in `logging_setup.py`, to stderr only. Default level WARNING;
+  `--verbose` sets DEBUG; `--quiet` sets ERROR.
+- Under `--verbose`, emit structured `key=value` records per case: `event`, `suite`, `case`,
+  `sample`, `cache` (hit or miss), `status_code`, `attempt`, `latency_ms`, `prompt_tokens`,
+  `completion_tokens`, `cost_usd`.
+- Never log the API key, full prompts, or full responses at info level or above. Debug may log
+  truncated excerpts (first 200 characters) only.
+
+### Security
+
+- Never hardcode secrets. The key comes from `EVALKIT_API_KEY` or a gitignored `.env`;
+  `.env.example` carries dummy values for every variable.
+- Never log or persist the key: no log field, error detail, cache entry, or report may contain it.
+  Redact `Authorization` headers if request debugging is ever added.
+- Suite and config YAML are user input: load them with `yaml.safe_load` only, and validate
+  structure, types, and assertion fields before any network call.
+- Parse JSON from the provider and the judge defensively; never assume a field is present.
+- `.evalkit/cache/` stores responses in plaintext and must stay gitignored. `baseline.json` must
+  never contain response text, so it stays safe to commit.
 
 ## How to add an assertion type
 
@@ -87,8 +134,9 @@ Reporters consume a `RunResult` (defined in `runner.py`) and never call the prov
 - **No new dependency without discussion.** evalkit is intentionally lean. If a change needs one,
   raise it first; when agreed, `pyproject.toml` and `uv.lock` change together in their own commit.
 - **Keep the docs honest.** If behavior changes, update the README and add a `CHANGELOG.md` entry
-  under `Unreleased`. `docs/PRD.md` and `docs/architecture.md` are the source of truth - flag a
-  change to them rather than editing them silently.
+  under `Unreleased`. If the change alters a documented format or design decision, update
+  `docs/architecture.md` or `docs/decisions.md` in the same pull request and say so in its
+  description.
 - **Match the style.** Type-hint public functions, keep functions small, and write comments only
   where the logic is non-obvious. No emoji anywhere. The provider is referred to as
   "the LLM provider API", never a specific vendor.

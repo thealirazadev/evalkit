@@ -34,7 +34,15 @@ class Verdict:
 
 
 class JudgeError(Exception):
-    """The judge returned an unparseable verdict after a retry; the case is an error."""
+    """The judge returned an unparseable verdict after a retry; the case is an error.
+
+    ``cost`` is what the failed attempts cost (None when it cannot be priced), so the
+    spend is still reported even though there is no verdict.
+    """
+
+    def __init__(self, cost: float | None = 0.0) -> None:
+        super().__init__("judge returned an unparseable verdict")
+        self.cost = cost
 
 
 def build_judge_messages(

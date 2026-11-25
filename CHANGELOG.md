@@ -18,6 +18,8 @@ feature set on `main`.
 
 ### Fixed
 
+- Judge cost counts every attempt, including an unparseable verdict that triggered the JSON-only
+  retry, and a cached replay reports the same judge cost as the fresh run.
 - `--verbose` no longer prints `error detail: None` for errors that carry no detail.
 
 ### Initial feature set

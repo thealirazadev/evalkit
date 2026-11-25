@@ -148,7 +148,9 @@ def _judge_call(
 
     The judge call is cached with the same mechanism as the case call. The key embeds the
     base (non-retry) judge prompt, which already contains the response and rubric, so the
-    key changes whenever either does.
+    key changes whenever either does. Cost covers every attempt, a discarded unparseable one
+    included, and the cache entry stores the summed usage so a cached replay reports the
+    same modeled cost as the fresh run.
     """
     base_content = build_judge_messages(assertion.rubric or "", response_text)[0]["content"]
     key = cache_key(config.base_url, judge_model, None, base_content, JUDGE_PARAMS, sample)
@@ -163,10 +165,14 @@ def _judge_call(
             logger.debug("event=judge model=%s cache=hit cost_usd=%s", judge_model, cost)
             return verdict, cost, True
 
+    prompt_tokens: int | None = 0
+    completion_tokens: int | None = 0
     for attempt in range(2):
         messages = build_judge_messages(assertion.rubric or "", response_text, retry=attempt == 1)
         resp = complete_chat(client, judge_model, messages, JUDGE_PARAMS)
-        cost = case_cost(config.pricing, judge_model, resp.prompt_tokens, resp.completion_tokens)
+        prompt_tokens = _add_tokens(prompt_tokens, resp.prompt_tokens)
+        completion_tokens = _add_tokens(completion_tokens, resp.completion_tokens)
+        cost = case_cost(config.pricing, judge_model, prompt_tokens, completion_tokens)
         verdict = parse_verdict(resp.text)
         logger.debug(
             "event=judge model=%s cache=miss attempt=%d latency_ms=%d valid=%s cost_usd=%s",
@@ -182,15 +188,22 @@ def _judge_call(
                 key,
                 CacheEntry(
                     resp.text,
-                    resp.prompt_tokens,
-                    resp.completion_tokens,
+                    prompt_tokens,
+                    completion_tokens,
                     resp.latency_ms,
                     _now_iso(),
                     judge_model,
                 ),
             )
             return verdict, cost, False
-    raise JudgeError()
+    raise JudgeError(cost)
+
+
+def _add_tokens(total: int | None, count: int | None) -> int | None:
+    """Sum token counts across attempts; unknown on any attempt makes the total unknown."""
+    if total is None or count is None:
+        return None
+    return total + count
 
 
 @dataclass
@@ -228,7 +241,11 @@ def _evaluate(
                 verdict, cost, cached = _judge_call(
                     assertion, text, judge_model, config, client, cache_root, sample
                 )
-            except JudgeError:
+            except JudgeError as exc:
+                if exc.cost is None:
+                    judge_cost_known = False
+                else:
+                    judge_cost += exc.cost
                 return _Eval(
                     failures,
                     judge_cost,

@@ -38,7 +38,10 @@ The `judge` assertion calls a separately resolved judge model at temperature 0 a
 `{"pass": bool, "reason": str}`. If the verdict cannot be parsed, evalkit retries once with a
 JSON-only instruction, then marks the case as an error (exit 2) rather than a failure (exit 1). A
 judge that returns garbage says nothing about the prompt under test. The judge's reason is shown
-verbatim in every report, and judge cost is tracked as its own total.
+verbatim in every report, and judge cost is tracked as its own total. That total counts every
+attempt: a bug found in review kept only the last attempt's cost, so a retried verdict
+under-reported spend and an errored judge reported none. The cache entry now stores the summed usage
+of both attempts, so a cached replay models the same cost as the fresh run (decision 3).
 
 ## 6. Exit code 2 always wins
 
